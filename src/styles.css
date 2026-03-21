@@ -100,8 +100,8 @@ textarea { resize: vertical; }
 }
 .help-trigger::-webkit-details-marker { display: none; }
 .help-panel {
-  position: absolute; right: 0; top: 38px; width: min(280px, 80vw); padding: 14px; border-radius: 16px; background: #fff;
-  border: 1px solid #e5e7eb; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12); z-index: 5;
+  position: absolute; right: 0; top: 38px; width: min(280px, calc(100vw - 48px)); max-width: calc(100vw - 48px); padding: 14px; border-radius: 16px; background: #fff;
+  border: 1px solid #e5e7eb; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12); z-index: 5; overflow-wrap: anywhere;
 }
 .help-panel strong { display: block; margin-bottom: 8px; }
 .help-panel p { margin: 0; color: #4b5563; line-height: 1.5; }
@@ -132,5 +132,7 @@ th { color:#6b7280; font-size:.78rem; text-transform:uppercase; letter-spacing:.
   .card-title-row { gap: 10px; }
   .title-actions { width: 100%; justify-content: space-between; }
   .download-button { width: 100%; }
-  .help-panel { right: auto; left: 0; width: min(260px, 78vw); }
+  .help-popover[open]::before { content: ''; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.12); z-index: 4; }
+  .help-panel { position: fixed; left: 12px; right: 12px; top: 96px; width: auto; max-width: none; z-index: 5; }
 }
+
