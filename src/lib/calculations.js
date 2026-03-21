@@ -3,6 +3,7 @@ export const DEFAULT_FORM = {
   perditeRete: 5,
   altriCostiViviUnitari: 0,
   quotaAmmortamento: 0.04,
+  numeroRicariche: 1,
   percentualeJCP: 6,
   stripePerc: 3,
   stripeFisso: 0.3,
@@ -45,6 +46,7 @@ export function migrateDraft(raw) {
   return {
     ...merged,
     quotaAmmortamento: clampNonNegative(legacyAmortization),
+    numeroRicariche: Math.max(1, Math.round(clampNonNegative(raw?.numeroRicariche ?? 1))),
     calcMode:
       raw?.calcMode === 'live_plus_infra'
         ? 'live_plus_amortization'
@@ -60,6 +62,7 @@ export function calculateResults(form) {
   const perditeRete = clampNonNegative(form.perditeRete);
   const altriCostiViviUnitari = clampNonNegative(form.altriCostiViviUnitari);
   const quotaAmmortamento = clampNonNegative(form.quotaAmmortamento);
+  const numeroRicariche = Math.max(1, Math.round(clampNonNegative(form.numeroRicariche)));
   const percentualeJCP = clampNonNegative(form.percentualeJCP);
   const stripePerc = clampNonNegative(form.stripePerc);
   const stripeFisso = clampNonNegative(form.stripeFisso);
@@ -88,7 +91,8 @@ export function calculateResults(form) {
   const lordoCliente = imponibileTotale * (1 + iva / 100);
   const nettoEnte = imponibileTotale * quotaEnte;
   const lordoJCP = imponibileTotale * (percentualeJCP / 100);
-  const stripeCost = imponibileTotale * (stripePerc / 100) + stripeFisso;
+  const stripeFixedTotal = stripeFisso * numeroRicariche;
+  const stripeCost = imponibileTotale * (stripePerc / 100) + stripeFixedTotal;
   const nettoJCP = lordoJCP - stripeCost;
 
   const saldoSpeseVive = nettoEnte - costoVivoTotale;
@@ -109,6 +113,8 @@ export function calculateResults(form) {
     imponibileTotale,
     lordoCliente,
     lordoJCP,
+    stripeFixedTotal,
+    numeroRicariche,
     stripeCost,
     nettoJCP,
     saldoSpeseVive,
