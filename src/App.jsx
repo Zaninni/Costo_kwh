@@ -17,6 +17,14 @@ const STORAGE_KEYS = {
   legacyDraft: 'lnf-tariff-draft-v1',
 };
 
+const PANEL_OPTIONS = [
+  { id: 'dashboard', label: 'Simulatore' },
+  { id: 'simulations', label: 'Storico simulazioni' },
+  { id: 'tariffs', label: 'Storico tariffe' },
+  { id: 'analysis', label: 'Tool utile ente' },
+  { id: 'manual', label: 'Manuale' },
+];
+
 const DEFAULT_ANALYSIS = {
   startMonth: '',
   endMonth: '',
@@ -226,11 +234,39 @@ function App() {
         <PanelButton id="manual">Manuale</PanelButton>
       </nav>
 
+      <div className="mobile-pagebar">
+        <div className="mobile-page-current">{PANEL_OPTIONS.find((item) => item.id === activePanel)?.label}</div>
+        <label className="mobile-page-select">
+          <span>Vai a</span>
+          <select value={activePanel} onChange={(e) => setActivePanel(e.target.value)}>
+            {PANEL_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        </label>
+      </div>
+
       {message ? <div className="toast">{message}</div> : null}
 
       {activePanel === 'dashboard' && (
         <>
           <section className="grid-layout dashboard-grid">
+            <article className="card">
+              <div className="card-title-row">
+                <h2>Modalità di calcolo prezzo</h2>
+                <HelpButton title="Modalità di calcolo">Scegli se vuoi coprire solo le spese vive, includere anche la quota ammortamento oppure verificare un prezzo lordo già deciso.</HelpButton>
+              </div>
+              <div className="mode-stack">
+                {MODE_OPTIONS.map((mode) => (
+                  <button key={mode.id} type="button" className={`mode-button ${form.calcMode === mode.id ? 'active' : ''}`} onClick={() => updateField('calcMode', mode.id)}>
+                    <strong>{mode.label}</strong>
+                    <span>{mode.description}</span>
+                  </button>
+                ))}
+              </div>
+              {form.calcMode === 'manual_gross' && (
+                <label><span>Prezzo lordo manuale (€/kWh)</span><input type="number" step="0.01" value={form.targetLordoManuale} onChange={(e) => updateField('targetLordoManuale', Number(e.target.value))} /></label>
+              )}
+            </article>
+
             <article className="card">
               <div className="card-title-row">
                 <h2>Costi ente</h2>
@@ -249,24 +285,6 @@ function App() {
                 <div><span>Costo vivo totale</span><strong>{formatCurrency(results.costoVivoTotale)}</strong></div>
                 <div><span>Quota ammortamento totale</span><strong>{formatCurrency(results.targetRecuperoTotale)}</strong></div>
               </div>
-            </article>
-
-            <article className="card">
-              <div className="card-title-row">
-                <h2>Modalità di calcolo prezzo</h2>
-                <HelpButton title="Modalità di calcolo">Scegli se vuoi coprire solo le spese vive, includere anche la quota ammortamento oppure verificare un prezzo lordo già deciso.</HelpButton>
-              </div>
-              <div className="mode-stack">
-                {MODE_OPTIONS.map((mode) => (
-                  <button key={mode.id} type="button" className={`mode-button ${form.calcMode === mode.id ? 'active' : ''}`} onClick={() => updateField('calcMode', mode.id)}>
-                    <strong>{mode.label}</strong>
-                    <span>{mode.description}</span>
-                  </button>
-                ))}
-              </div>
-              {form.calcMode === 'manual_gross' && (
-                <label><span>Prezzo lordo manuale (€/kWh)</span><input type="number" step="0.01" value={form.targetLordoManuale} onChange={(e) => updateField('targetLordoManuale', Number(e.target.value))} /></label>
-              )}
             </article>
 
             <article className="card span-two">
