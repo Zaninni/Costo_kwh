@@ -58,7 +58,7 @@ Le tariffe locali e cloud usano lo stesso shape:
   - Salva simulazione su cloud
   - Salva tariffa nel browser
   - Salva tariffa su cloud
-- Il salvataggio cloud usa `upsert` su `id`, quindi non esiste un pulsante “Aggiorna cloud”.
+- Ogni click sui pulsanti di salvataggio crea sempre un nuovo record, anche se la configurazione corrente deriva da un record già aperto.
 - Gli ID applicativi restano stringhe generate lato app con `createId('SIM')` e `createId('TAR')`, sia in locale sia su Supabase.
 
 ## Tabelle Supabase attese

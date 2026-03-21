@@ -307,8 +307,6 @@ function App() {
   };
 
   const buildCurrentSimulationEntry = (source) => buildSimulationEntry({
-    id: currentSimulationRef?.id,
-    savedAt: currentSimulationRef?.savedAt,
     formSnapshot: form,
     results,
     source,
@@ -319,8 +317,6 @@ function App() {
     if (!referencePeriod) return null;
 
     return buildTariffEntry({
-      id: currentTariffRef?.id,
-      savedAt: currentTariffRef?.savedAt,
       referencePeriod,
       formSnapshot: form,
       results,

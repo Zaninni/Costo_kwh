@@ -62,6 +62,11 @@ export function migrateDraft(raw) {
   };
 }
 
+
+function getModeTitleLabel(calcMode) {
+  const rawLabel = MODE_OPTIONS.find((mode) => mode.id === calcMode)?.label || calcMode;
+  return String(rawLabel).replace(/^\d+\s*·\s*/, '').trim();
+}
 function buildBaseEntry({ id, savedAt, title, referencePeriod, formSnapshot, results, source }) {
   return {
     id,
@@ -75,7 +80,7 @@ function buildBaseEntry({ id, savedAt, title, referencePeriod, formSnapshot, res
 }
 
 export function buildSimulationEntry({ id = createId('SIM'), savedAt = new Date().toISOString(), formSnapshot, results, source }) {
-  const modeLabel = MODE_OPTIONS.find((mode) => mode.id === formSnapshot.calcMode)?.label || formSnapshot.calcMode;
+  const modeLabel = getModeTitleLabel(formSnapshot.calcMode);
   return buildBaseEntry({
     id,
     savedAt,
@@ -98,7 +103,7 @@ export function buildTariffEntry({
   const normalizedReferencePeriod = String(referencePeriod || '').trim();
   if (!normalizedReferencePeriod) throw new Error('Il periodo di riferimento è obbligatorio per le tariffe.');
 
-  const modeLabel = MODE_OPTIONS.find((mode) => mode.id === formSnapshot.calcMode)?.label || formSnapshot.calcMode;
+  const modeLabel = getModeTitleLabel(formSnapshot.calcMode);
   return buildBaseEntry({
     id,
     savedAt,
