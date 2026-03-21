@@ -24,36 +24,24 @@ const DEFAULT_ANALYSIS = {
   consumedKwh: 0,
   actualNetRevenuePerKwh: 0,
   overrideEnergyCost: 0,
-  periodExpectedKwh: 0,
+  overrideAmortization: 0,
   notes: '',
 };
 
 const MODE_OPTIONS = [
-  { id: 'live_only', label: '1 · Pareggio spese vive', description: 'Il prezzo copre solo le spese vive nette IVA dell’ente.' },
+  { id: 'live_only', label: '1 · Pareggio spese vive', description: 'La tariffa copre esclusivamente energia, perdite e altri costi vivi.' },
   {
-    id: 'live_plus_infra',
-    label: '2 · Pareggio spese vive + target recupero infrastrutturale',
-    description: 'Il prezzo incorpora spese vive e quota di recupero del periodo analizzato.',
+    id: 'live_plus_amortization',
+    label: '2 · Spese vive + recupero ammortamento',
+    description: 'La tariffa copre le spese vive e aggiunge una quota distinta di recupero infrastrutturale.',
   },
-  { id: 'manual_gross', label: '3 · Prezzo lordo manuale', description: 'Inserisci direttamente il prezzo lordo €/kWh da verificare.' },
+  { id: 'manual_gross', label: '3 · Prezzo lordo manuale', description: 'Inserisci un prezzo lordo €/kWh e verifica la ripartizione economica.' },
 ];
-
-const newInfrastructureItem = () => ({
-  id: createId('infra'),
-  descrizione: '',
-  categoria: 'investimento',
-  importoNetto: 0,
-  dataInizio: '',
-  dataFine: '',
-  metodoRiparto: 'lineare_tempo',
-  kwhPrevistiTotali: 0,
-  note: '',
-});
 
 const healthDescriptions = {
   red: 'Rosso · il netto ente non copre le spese vive.',
-  yellow: 'Giallo · spese vive coperte ma target recupero non pienamente coperto.',
-  green: 'Verde · spese vive coperte e target recupero raggiunto.',
+  yellow: 'Giallo · spese vive coperte ma target ammortamento non pienamente coperto.',
+  green: 'Verde · spese vive coperte e target ammortamento raggiunto.',
 };
 
 function App() {
@@ -71,7 +59,6 @@ function App() {
   }));
   const [activePanel, setActivePanel] = useState('dashboard');
   const [message, setMessage] = useState('');
-  const [showInfraManager, setShowInfraManager] = useState(false);
 
   const results = useMemo(() => calculateResults(form), [form]);
 
@@ -103,17 +90,18 @@ function App() {
 
   const analysisPreview = useMemo(() => {
     if (!selectedTariff) return null;
+
     const baseForm = migrateDraft(selectedTariff.formSnapshot);
     const consumedKwh = Number(analysisDraft.consumedKwh) || 0;
     const actualNetRevenuePerKwh = Number(analysisDraft.actualNetRevenuePerKwh) || 0;
     const overrideEnergyCost = Number(analysisDraft.overrideEnergyCost) || 0;
-    const periodExpectedKwh = Number(analysisDraft.periodExpectedKwh) || baseForm.periodExpectedKwh;
+    const overrideAmortization = Number(analysisDraft.overrideAmortization) || 0;
 
     const actualForm = {
       ...baseForm,
       kwh: consumedKwh,
-      periodExpectedKwh,
       costoEnergia: overrideEnergyCost > 0 ? overrideEnergyCost : baseForm.costoEnergia,
+      quotaAmmortamento: overrideAmortization > 0 ? overrideAmortization : baseForm.quotaAmmortamento,
     };
 
     const actualResults = calculateResults(actualForm);
@@ -130,26 +118,9 @@ function App() {
       recuperoInfrastrutturaleDisponibile: recuperoDisponibile,
       coperturaTarget,
     };
-  }, [analysisDraft.actualNetRevenuePerKwh, analysisDraft.consumedKwh, analysisDraft.overrideEnergyCost, analysisDraft.periodExpectedKwh, selectedTariff]);
+  }, [analysisDraft.actualNetRevenuePerKwh, analysisDraft.consumedKwh, analysisDraft.overrideAmortization, analysisDraft.overrideEnergyCost, selectedTariff]);
 
   const updateField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const updateInfrastructureRow = (id, key, value) => {
-    setForm((current) => ({
-      ...current,
-      infrastructureItems: current.infrastructureItems.map((item) => (item.id === id ? { ...item, [key]: value } : item)),
-    }));
-  };
-
-  const addInfrastructureItem = () => {
-    setForm((current) => ({ ...current, infrastructureItems: [...current.infrastructureItems, newInfrastructureItem()] }));
-  };
-
-  const removeInfrastructureItem = (id) => {
-    setForm((current) => ({
-      ...current,
-      infrastructureItems: current.infrastructureItems.filter((item) => item.id !== id),
-    }));
-  };
 
   const persistEntry = (type) => {
     const entry = {
@@ -183,17 +154,16 @@ function App() {
       <header className="hero-card">
         <div>
           <p className="eyebrow">Laboratori Nazionali di Frascati</p>
-          <h1>Tariffa EV: pareggio spese vive e recupero infrastrutturale</h1>
+          <h1>Simulatore tariffa EV</h1>
           <p className="hero-copy">
-            Il frontend separa il flusso di gestione costi infrastrutturali dal calcolo tariffario, distingue i kWh
-            previsti per il periodo analizzato dai kWh reali simulati e rende trasparente quando esiste una perdita
-            reale dell’ente rispetto al semplice mancato recupero infrastrutturale.
+            Interfaccia semplificata e più chiara: da una parte le spese vive dell’ente, dall’altra la sola quota di
+            ammortamento infrastrutturale, mantenendo semaforo, storici e analisi dell’utile.
           </p>
         </div>
         <div className="hero-badges">
-          <span>Tutti i costi netti IVA</span>
-          <span>Periodo analizzato dedicato</span>
-          <span>Storici e manuale inclusi</span>
+          <span>Layout alleggerito</span>
+          <span>Fondo bianco</span>
+          <span>Calcolo semplificato</span>
         </div>
       </header>
 
@@ -212,7 +182,7 @@ function App() {
           <section className="grid-layout dashboard-grid">
             <article className="card">
               <div className="card-title-row">
-                <h2>Costi vivi ente</h2>
+                <h2>Costi ente</h2>
                 <span className="tag">Netto IVA</span>
               </div>
               <div className="field-grid">
@@ -229,11 +199,15 @@ function App() {
                   <input type="number" step="0.001" value={form.altriCostiViviUnitari} onChange={(e) => updateField('altriCostiViviUnitari', Number(e.target.value))} />
                 </label>
                 <label>
-                  <span>kWh reali simulati per il prezzo</span>
+                  <span>Quota ammortamento (€/kWh)</span>
+                  <input type="number" step="0.001" value={form.quotaAmmortamento} onChange={(e) => updateField('quotaAmmortamento', Number(e.target.value))} />
+                </label>
+                <label className="span-full">
+                  <span>kWh del caso simulato</span>
                   <input type="number" value={form.kwh} onChange={(e) => updateField('kwh', Number(e.target.value))} />
                 </label>
               </div>
-              <div className="mini-metrics two-col">
+              <div className="mini-metrics three-col">
                 <div>
                   <span>Costo vivo unitario</span>
                   <strong>{formatCurrency(results.costoVivoUnitario)}/kWh</strong>
@@ -242,72 +216,17 @@ function App() {
                   <span>Costo vivo totale</span>
                   <strong>{formatCurrency(results.costoVivoTotale)}</strong>
                 </div>
-              </div>
-            </article>
-
-            <article className="card">
-              <div className="card-title-row">
-                <h2>Periodo analizzato</h2>
-                <span className="tag alt">Quota target</span>
-              </div>
-              <div className="field-grid">
-                <label>
-                  <span>Periodo analizzato · inizio</span>
-                  <input type="date" value={form.periodStart} onChange={(e) => updateField('periodStart', e.target.value)} />
-                </label>
-                <label>
-                  <span>Periodo analizzato · fine</span>
-                  <input type="date" value={form.periodEnd} onChange={(e) => updateField('periodEnd', e.target.value)} />
-                </label>
-                <label className="span-full">
-                  <span>kWh previsti periodo analizzato</span>
-                  <input type="number" value={form.periodExpectedKwh} onChange={(e) => updateField('periodExpectedKwh', Number(e.target.value))} />
-                </label>
-              </div>
-              <p className="helper-copy">
-                Questo valore serve solo a distribuire le voci con metodo <strong>per_kwh_previsti</strong>. Non coincide con i kWh reali simulati usati per il prezzo cliente.
-              </p>
-              <div className="mini-metrics two-col">
                 <div>
-                  <span>Target recupero infrastrutturale</span>
+                  <span>Target ammortamento</span>
                   <strong>{formatCurrency(results.targetRecuperoTotale)}</strong>
                 </div>
-                <div>
-                  <span>Target recupero unitario sul caso simulato</span>
-                  <strong>{formatCurrency(results.targetRecuperoUnitario)}/kWh</strong>
-                </div>
               </div>
             </article>
 
-            <article className="card">
-              <div className="card-title-row">
-                <h2>Gestione costi infrastrutturali</h2>
-                <span className="tag success">Pannello dedicato</span>
-              </div>
-              <div className="mini-metrics single-column">
-                <div>
-                  <span>Numero voci</span>
-                  <strong>{form.infrastructureItems.length}</strong>
-                </div>
-                <div>
-                  <span>Periodo voce vs periodo analizzato</span>
-                  <strong>Separati</strong>
-                </div>
-              </div>
-              <p className="helper-copy">
-                Inserisci e modifica le voci infrastrutturali in un pannello dedicato: durata ammortamento voce, metodo di allocazione costi, kWh previsti totali voce e quota del periodo analizzato.
-              </p>
-              <button type="button" className="primary" onClick={() => setShowInfraManager(true)}>
-                Apri gestione voci infrastrutturali
-              </button>
-            </article>
-          </section>
-
-          <section className="grid-layout dashboard-grid second-row">
             <article className="card">
               <div className="card-title-row">
                 <h2>Modalità di calcolo prezzo</h2>
-                <span className="tag success">3 modalità</span>
+                <span className="tag alt">3 modalità</span>
               </div>
               <div className="mode-stack">
                 {MODE_OPTIONS.map((mode) => (
@@ -352,54 +271,66 @@ function App() {
               </div>
             </article>
 
-            <article className="card span-two">
+            <article className="card emphasis-card">
               <div className="card-title-row">
-                <h2>Metriche economiche</h2>
-                <span className={`status-pill ${results.health}`}>{healthDescriptions[results.health]}</span>
+                <h2>Chiarezza del modello</h2>
+                <span className="tag success">Sintesi</span>
               </div>
-              <div className="metric-grid">
-                <div className="metric-highlight">
-                  <span>Prezzo finale cliente</span>
-                  <strong>{formatCurrency(results.lordoCliente)}</strong>
-                  <small>{formatCurrency(results.prezzoUnitarioLordo)}/kWh</small>
-                </div>
-                <div>
-                  <span>Netto ente</span>
-                  <strong>{formatCurrency(results.nettoEnte)}</strong>
-                </div>
-                <div>
-                  <span>Costo vivo totale</span>
-                  <strong>{formatCurrency(results.costoVivoTotale)}</strong>
-                </div>
-                <div className={results.saldoSpeseVive < 0 ? 'negative' : 'positive'}>
-                  <span>Saldo spese vive ente</span>
-                  <strong>{formatCurrency(results.saldoSpeseVive)}</strong>
-                </div>
-                <div>
-                  <span>Recupero infrastrutturale disponibile</span>
-                  <strong>{formatCurrency(results.recuperoInfrastrutturaleDisponibile)}</strong>
-                </div>
-                <div>
-                  <span>Target recupero infrastrutturale</span>
-                  <strong>{formatCurrency(results.targetRecuperoTotale)}</strong>
-                </div>
-                <div className={results.coperturaTarget >= 1 ? 'positive' : 'warning'}>
-                  <span>Copertura target recupero</span>
-                  <strong>{formatNumber(results.coperturaTarget * 100, 1)}%</strong>
-                </div>
-                <div>
-                  <span>JCP netto reale</span>
-                  <strong>{formatCurrency(results.nettoJCP)}</strong>
-                </div>
-              </div>
+              <ul className="info-list">
+                <li>Le spese vive = energia + perdite + altri costi vivi.</li>
+                <li>L’ammortamento è una quota separata e non misura una perdita reale.</li>
+                <li>La perdita reale esiste solo se il netto ente non copre le spese vive.</li>
+              </ul>
             </article>
           </section>
 
-          <section className="table-card">
+          <section className="card results-card second-row">
+            <div className="card-title-row">
+              <h2>Metriche economiche</h2>
+              <span className={`status-pill ${results.health}`}>{healthDescriptions[results.health]}</span>
+            </div>
+            <div className="metric-grid">
+              <div className="metric-highlight">
+                <span>Prezzo finale cliente</span>
+                <strong>{formatCurrency(results.lordoCliente)}</strong>
+                <small>{formatCurrency(results.prezzoUnitarioLordo)}/kWh</small>
+              </div>
+              <div>
+                <span>Netto ente</span>
+                <strong>{formatCurrency(results.nettoEnte)}</strong>
+              </div>
+              <div>
+                <span>Costo vivo totale</span>
+                <strong>{formatCurrency(results.costoVivoTotale)}</strong>
+              </div>
+              <div>
+                <span>Target recupero infrastrutturale</span>
+                <strong>{formatCurrency(results.targetRecuperoTotale)}</strong>
+              </div>
+              <div className={results.saldoSpeseVive < 0 ? 'negative' : 'positive'}>
+                <span>Saldo spese vive ente</span>
+                <strong>{formatCurrency(results.saldoSpeseVive)}</strong>
+              </div>
+              <div>
+                <span>Recupero infrastrutturale disponibile</span>
+                <strong>{formatCurrency(results.recuperoInfrastrutturaleDisponibile)}</strong>
+              </div>
+              <div className={results.coperturaTarget >= 1 ? 'positive' : 'warning'}>
+                <span>Copertura target recupero</span>
+                <strong>{formatNumber(results.coperturaTarget * 100, 1)}%</strong>
+              </div>
+              <div>
+                <span>JCP netto reale</span>
+                <strong>{formatCurrency(results.nettoJCP)}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="table-card second-row">
             <div className="table-head">
               <div>
                 <p className="eyebrow">Anteprima finale</p>
-                <h3>Rendiconto sintetico del caso simulato</h3>
+                <h3>Rendiconto sintetico</h3>
               </div>
               <span>{new Date().toLocaleString('it-IT')}</span>
             </div>
@@ -478,7 +409,7 @@ function App() {
           <article className="card">
             <div className="card-title-row">
               <h2>Tool utile ente</h2>
-              <span className="tag">Periodo reale</span>
+              <span className="tag">Verifica periodo reale</span>
             </div>
             <div className="field-grid">
               <label>
@@ -508,8 +439,8 @@ function App() {
                 <input type="number" step="0.001" value={analysisDraft.overrideEnergyCost} onChange={(e) => setAnalysisDraft((current) => ({ ...current, overrideEnergyCost: Number(e.target.value) }))} />
               </label>
               <label className="span-full">
-                <span>kWh previsti periodo analizzato</span>
-                <input type="number" value={analysisDraft.periodExpectedKwh} onChange={(e) => setAnalysisDraft((current) => ({ ...current, periodExpectedKwh: Number(e.target.value) }))} />
+                <span>Quota ammortamento aggiornata (€/kWh)</span>
+                <input type="number" step="0.001" value={analysisDraft.overrideAmortization} onChange={(e) => setAnalysisDraft((current) => ({ ...current, overrideAmortization: Number(e.target.value) }))} />
               </label>
             </div>
             <label>
@@ -529,9 +460,9 @@ function App() {
               <div className="metric-grid single-column">
                 <div><span>Netto ente periodo</span><strong>{formatCurrency(analysisPreview.nettoEnte)}</strong></div>
                 <div><span>Costo vivo totale</span><strong>{formatCurrency(analysisPreview.costoVivoTotale)}</strong></div>
+                <div><span>Target recupero infrastrutturale</span><strong>{formatCurrency(analysisPreview.targetRecuperoTotale)}</strong></div>
                 <div className={analysisPreview.saldoSpeseVive < 0 ? 'negative' : 'positive'}><span>Saldo spese vive ente</span><strong>{formatCurrency(analysisPreview.saldoSpeseVive)}</strong></div>
                 <div><span>Recupero infrastrutturale disponibile</span><strong>{formatCurrency(analysisPreview.recuperoInfrastrutturaleDisponibile)}</strong></div>
-                <div><span>Target recupero infrastrutturale</span><strong>{formatCurrency(analysisPreview.targetRecuperoTotale)}</strong></div>
                 <div className={analysisPreview.coperturaTarget >= 1 ? 'positive' : 'warning'}><span>Copertura target recupero</span><strong>{formatNumber(analysisPreview.coperturaTarget * 100, 1)}%</strong></div>
               </div>
             )}
@@ -543,110 +474,24 @@ function App() {
         <section className="manual card">
           <div className="card-title-row">
             <h2>Manuale operativo</h2>
-            <span className="tag">Specifiche e formule</span>
+            <span className="tag">Formula verificata</span>
           </div>
           <ol>
-            <li><strong>Costi netti IVA.</strong> Tutti gli importi inseriti dall’utente sono netti IVA. L’IVA viene applicata solo a valle per ottenere il prezzo lordo cliente.</li>
-            <li><strong>Distinzione concettuale.</strong> Le spese vive coprono energia, perdite rete e altri costi vivi unitari. Il recupero infrastrutturale è un obiettivo separato: se non viene raggiunto non significa automaticamente perdita reale.</li>
-            <li><strong>Perdita reale ente.</strong> Esiste solo quando il <em>Netto ente</em> è inferiore al <em>Costo vivo totale</em>. Per questo la metrica chiave è <em>Saldo spese vive ente = netto ente − costo vivo totale</em>.</li>
-            <li><strong>Periodo della voce vs periodo analizzato.</strong> Ogni voce infrastrutturale ha una durata propria (<em>data inizio/data fine</em>) che definisce il periodo della voce. Separatamente il simulatore usa un <em>periodo analizzato</em> per capire quale quota di quella voce allocare nel mese o trimestre osservato.</li>
-            <li><strong>Gestione costi infrastrutturali.</strong> Le voci sono gestite in un pannello dedicato con: descrizione, categoria, importo netto, durata ammortamento voce, metodo di allocazione costi, kWh previsti totali voce e note.</li>
-            <li><strong>Metodo lineare_tempo.</strong> Quota periodo = importo netto × (giorni sovrapposti tra periodo voce e periodo analizzato / giorni totali della voce).</li>
-            <li><strong>Metodo per_kwh_previsti.</strong> Quota unitaria = importo netto / kWh previsti totali voce. Quota periodo = quota unitaria × kWh previsti periodo analizzato. Questo dato non usa i kWh reali simulati per il prezzo.</li>
-            <li><strong>Metodo una_tantum.</strong> L’intera voce viene imputata se cade in tutto o in parte nel periodo analizzato; altrimenti la quota del periodo vale zero.</li>
-            <li><strong>kWh previsti vs kWh reali.</strong> <em>kWh previsti periodo analizzato</em> servono esclusivamente per ripartire le voci <em>per_kwh_previsti</em>. <em>kWh reali simulati</em> servono invece per stimare il prezzo al cliente e i saldi economici del caso.</li>
-            <li><strong>Target recupero infrastrutturale.</strong> È la somma delle quote periodo di tutte le voci calcolate prima del motore tariffario. Il target unitario è poi ottenuto dividendo il target periodo per i kWh reali simulati.</li>
-            <li><strong>Motori di prezzo.</strong> Modalità 1: pareggio spese vive. Modalità 2: pareggio spese vive + target recupero. Modalità 3: prezzo lordo manuale da scomporre.</li>
-            <li><strong>Formule principali.</strong> Costo vivo unitario = costo energia × (1 + perdite rete) + altri costi vivi unitari. Costo vivo totale = costo vivo unitario × kWh reali. Recupero infrastrutturale disponibile = max(0, netto ente − costo vivo totale). Copertura target recupero = recupero disponibile / target recupero.</li>
-            <li><strong>Semaforo.</strong> Rosso se il saldo spese vive è negativo. Giallo se il saldo spese vive è non negativo ma la copertura target è sotto il 100%. Verde se spese vive e target risultano entrambi coperti.</li>
-            <li><strong>Esempio pratico.</strong> Un investimento da 10.000 € su 5 anni allocato su Q1 2026 usa il rapporto tra giorni del trimestre e giorni totali della voce. Con metodo per_kwh_previsti, invece, la quota dipende da kWh previsti totali voce e kWh previsti del periodo analizzato.</li>
+            <li><strong>Tutti gli importi inseriti sono netti IVA.</strong> Il prezzo lordo al cliente si ottiene solo alla fine applicando l’IVA all’imponibile totale.</li>
+            <li><strong>Spese vive.</strong> Costo vivo unitario = costo energia × (1 + perdite rete / 100) + altri costi vivi unitari.</li>
+            <li><strong>Costo vivo totale.</strong> Costo vivo totale = costo vivo unitario × kWh.</li>
+            <li><strong>Quota ammortamento.</strong> Il recupero infrastrutturale è ora una sola quota unitaria: target recupero infrastrutturale = quota ammortamento × kWh.</li>
+            <li><strong>Pareggio spese vive.</strong> Se scegli la modalità 1, il netto ente target coincide con il solo costo vivo totale.</li>
+            <li><strong>Pareggio spese vive + ammortamento.</strong> Se scegli la modalità 2, il netto ente target = costo vivo totale + target recupero infrastrutturale.</li>
+            <li><strong>Calcolo imponibile.</strong> Con commissione JCP del 6%, il netto ente è il 94% dell’imponibile. Quindi imponibile = netto ente target / (1 − percentuale JCP).</li>
+            <li><strong>Prezzo manuale.</strong> In modalità 3, imponibile = (prezzo lordo manuale × kWh) / (1 + IVA).</li>
+            <li><strong>Perdita reale dell’ente.</strong> Esiste solo quando <em>Saldo spese vive ente = netto ente − costo vivo totale</em> è negativo.</li>
+            <li><strong>Recupero infrastrutturale disponibile.</strong> È definito come max(0, netto ente − costo vivo totale). Solo ciò che resta dopo aver coperto le spese vive può essere letto come recupero ammortamento.</li>
+            <li><strong>Copertura target recupero.</strong> Copertura = recupero infrastrutturale disponibile / target recupero infrastrutturale.</li>
+            <li><strong>Semaforo.</strong> Rosso se saldo spese vive &lt; 0; giallo se saldo spese vive ≥ 0 ma copertura target &lt; 100%; verde se entrambe le condizioni sono soddisfatte.</li>
+            <li><strong>Utile JCP reale.</strong> Lordo JCP = imponibile × percentuale JCP. Netto JCP = lordo JCP − [(imponibile × stripe %) + stripe fisso].</li>
           </ol>
         </section>
-      )}
-
-      {showInfraManager && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setShowInfraManager(false)}>
-          <section className="modal-card" role="dialog" aria-modal="true" aria-label="Gestione costi infrastrutturali" onClick={(e) => e.stopPropagation()}>
-            <div className="card-title-row">
-              <div>
-                <p className="eyebrow">Pannello dedicato</p>
-                <h2>Gestione costi infrastrutturali</h2>
-              </div>
-              <div className="inline-actions">
-                <button type="button" className="secondary" onClick={addInfrastructureItem}>Aggiungi voce</button>
-                <button type="button" className="danger" onClick={() => setShowInfraManager(false)}>Chiudi</button>
-              </div>
-            </div>
-            <div className="infrastructure-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Descrizione</th>
-                    <th>Categoria</th>
-                    <th>Importo netto IVA (€)</th>
-                    <th>Durata ammortamento voce</th>
-                    <th>Metodo di allocazione costi</th>
-                    <th>KWh previsti totali voce</th>
-                    <th>Note</th>
-                    <th>Quota periodo</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.infrastructureItems.map((item, index) => {
-                    const previewRow = results.infrastructureRows.find((row) => row.id === item.id) || item;
-                    return (
-                      <tr key={item.id}>
-                        <td><input aria-label={`descrizione-${index}`} value={item.descrizione} onChange={(e) => updateInfrastructureRow(item.id, 'descrizione', e.target.value)} /></td>
-                        <td>
-                          <select value={item.categoria} onChange={(e) => updateInfrastructureRow(item.id, 'categoria', e.target.value)}>
-                            <option value="investimento">investimento</option>
-                            <option value="manutenzione">manutenzione</option>
-                            <option value="gestione_fissa">gestione_fissa</option>
-                            <option value="altro">altro</option>
-                          </select>
-                        </td>
-                        <td><input type="number" step="0.01" value={item.importoNetto} onChange={(e) => updateInfrastructureRow(item.id, 'importoNetto', Number(e.target.value))} /></td>
-                        <td>
-                          <div className="stacked-inputs">
-                            <input type="date" value={item.dataInizio} onChange={(e) => updateInfrastructureRow(item.id, 'dataInizio', e.target.value)} />
-                            <input type="date" value={item.dataFine} onChange={(e) => updateInfrastructureRow(item.id, 'dataFine', e.target.value)} />
-                          </div>
-                        </td>
-                        <td>
-                          <select value={item.metodoRiparto} onChange={(e) => updateInfrastructureRow(item.id, 'metodoRiparto', e.target.value)}>
-                            <option value="lineare_tempo">lineare_tempo</option>
-                            <option value="per_kwh_previsti">per_kwh_previsti</option>
-                            <option value="una_tantum">una_tantum</option>
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={item.kwhPrevistiTotali}
-                            disabled={item.metodoRiparto !== 'per_kwh_previsti'}
-                            onChange={(e) => updateInfrastructureRow(item.id, 'kwhPrevistiTotali', Number(e.target.value))}
-                          />
-                        </td>
-                        <td><textarea rows="3" value={item.note} onChange={(e) => updateInfrastructureRow(item.id, 'note', e.target.value)} /></td>
-                        <td>
-                          <strong>{formatCurrency(previewRow.quotaPeriodo || 0)}</strong>
-                          <small>{previewRow.metodoRiparto === 'per_kwh_previsti' ? `${formatCurrency(previewRow.quotaUnitariaPeriodo || 0)}/kWh previsto` : `${previewRow.overlappedDays || 0} gg sovrapposti`}</small>
-                        </td>
-                        <td>
-                          <button type="button" className="danger" onClick={() => removeInfrastructureItem(item.id)} disabled={form.infrastructureItems.length === 1}>
-                            Elimina voce
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
       )}
     </div>
   );
