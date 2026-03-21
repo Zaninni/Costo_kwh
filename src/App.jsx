@@ -261,13 +261,20 @@ function App() {
               {form.calcMode === 'manual_gross' && (
                 <label><span>Prezzo lordo manuale (€/kWh)</span><input type="number" step="0.01" value={form.targetLordoManuale} onChange={(e) => updateField('targetLordoManuale', Number(e.target.value))} /></label>
               )}
-              <div className="field-grid compact-top">
+            </article>
+
+            <article className="card">
+              <div className="card-title-row">
+                <h2>Impostazioni gestore e IVA</h2>
+                <HelpButton title="Impostazioni gestore e IVA">Qui imposti i parametri lato gestore: commissione JCP, commissioni Stripe e aliquota IVA. Questi valori influenzano la ripartizione economica ma non la scelta della modalità.</HelpButton>
+              </div>
+              <div className="field-grid">
                 <label><span>Commissione JCP (%)</span><input type="number" value={form.percentualeJCP} onChange={(e) => updateField('percentualeJCP', Number(e.target.value))} /></label>
                 <label><span>IVA (%)</span><input type="number" value={form.iva} onChange={(e) => updateField('iva', Number(e.target.value))} /></label>
                 <label><span>Stripe %</span><input type="number" step="0.1" value={form.stripePerc} onChange={(e) => updateField('stripePerc', Number(e.target.value))} /></label>
                 <label><span>Stripe fisso per ricarica (€)</span><input type="number" step="0.01" value={form.stripeFisso} onChange={(e) => updateField('stripeFisso', Number(e.target.value))} /></label>
               </div>
-              <div className="action-row">
+              <div className="action-row action-row-split">
                 <button type="button" className="primary" onClick={() => persistEntry('simulation')}>Salva simulazione</button>
                 <button type="button" className="secondary" onClick={() => persistEntry('tariff')}>Salva come tariffa approvata</button>
               </div>
