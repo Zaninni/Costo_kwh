@@ -154,3 +154,9 @@ th { color:#6b7280; font-size:.78rem; text-transform:uppercase; letter-spacing:.
   .help-panel { position: fixed; left: 12px; right: 12px; top: 96px; width: auto; max-width: none; z-index: 5; }
 }
 
+
+.inline-note { margin: 16px 0 0; color: #6b7280; }
+.dashboard-save-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 980px) {
+  .dashboard-save-grid { grid-template-columns: 1fr; }
+}

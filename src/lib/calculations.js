@@ -13,6 +13,12 @@ export const DEFAULT_FORM = {
   calcMode: 'live_plus_amortization',
 };
 
+export const MODE_OPTIONS = [
+  { id: 'live_only', label: '1 · Solo spese vive', description: 'Copre solo i costi vivi.' },
+  { id: 'live_plus_amortization', label: '2 · Spese vive + quota ammortamento', description: 'Aggiunge la quota infrastrutturale.' },
+  { id: 'manual_gross', label: '3 · Prezzo lordo manuale', description: 'Verifica un prezzo inserito a mano.' },
+];
+
 export const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const formatCurrency = (value) =>
@@ -54,6 +60,72 @@ export function migrateDraft(raw) {
           ? raw.calcMode
           : DEFAULT_FORM.calcMode,
   };
+}
+
+function buildBaseEntry({ id, savedAt, title, referencePeriod, formSnapshot, results, source }) {
+  return {
+    id,
+    savedAt,
+    title,
+    referencePeriod,
+    formSnapshot: migrateDraft(formSnapshot),
+    results,
+    source,
+  };
+}
+
+export function buildSimulationEntry({ id = createId('SIM'), savedAt = new Date().toISOString(), formSnapshot, results, source }) {
+  const modeLabel = MODE_OPTIONS.find((mode) => mode.id === formSnapshot.calcMode)?.label || formSnapshot.calcMode;
+  return buildBaseEntry({
+    id,
+    savedAt,
+    title: `${formSnapshot.kwh} kWh · ${modeLabel}`,
+    referencePeriod: '',
+    formSnapshot,
+    results,
+    source,
+  });
+}
+
+export function buildTariffEntry({
+  id = createId('TAR'),
+  savedAt = new Date().toISOString(),
+  referencePeriod,
+  formSnapshot,
+  results,
+  source,
+}) {
+  const normalizedReferencePeriod = String(referencePeriod || '').trim();
+  if (!normalizedReferencePeriod) throw new Error('Il periodo di riferimento è obbligatorio per le tariffe.');
+
+  const modeLabel = MODE_OPTIONS.find((mode) => mode.id === formSnapshot.calcMode)?.label || formSnapshot.calcMode;
+  return buildBaseEntry({
+    id,
+    savedAt,
+    title: `Tariffa ${normalizedReferencePeriod} · ${modeLabel}`,
+    referencePeriod: normalizedReferencePeriod,
+    formSnapshot,
+    results,
+    source,
+  });
+}
+
+export function mapDbRowToEntry(row, source = 'cloud') {
+  return {
+    id: row.id,
+    savedAt: row.saved_at,
+    updatedAt: row.updated_at,
+    title: row.title,
+    referencePeriod: row.reference_period ?? '',
+    formSnapshot: migrateDraft(row.form_snapshot),
+    results: row.results,
+    ownerId: row.owner_id,
+    source,
+  };
+}
+
+export function upsertEntryInState(entries, nextEntry) {
+  return [nextEntry, ...entries.filter((entry) => entry.id !== nextEntry.id)];
 }
 
 export function calculateResults(form) {
