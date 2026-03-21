@@ -8,6 +8,8 @@ import {
   migrateDraft,
   safeParse,
 } from './lib/calculations';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { createCloudSimulation, deleteCloudSimulation, fetchVisibleSimulations, updateCloudSimulation } from './services/simulations';
 
 const STORAGE_KEYS = {
   draft: 'lnf-tariff-draft-v2',
@@ -24,6 +26,11 @@ const PANEL_OPTIONS = [
   { id: 'analysis', label: 'Tool utile ente' },
   { id: 'manual', label: 'Manuale' },
 ];
+
+const DEFAULT_OWNER_LOGIN = {
+  email: '',
+  password: '',
+};
 
 const DEFAULT_ANALYSIS = {
   startMonth: '',
@@ -139,8 +146,19 @@ function App() {
   const [message, setMessage] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeHelpId, setActiveHelpId] = useState(null);
+  const [session, setSession] = useState(null);
+  const [ownerLogin, setOwnerLogin] = useState(DEFAULT_OWNER_LOGIN);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [cloudSimulations, setCloudSimulations] = useState([]);
+  const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudError, setCloudError] = useState('');
+  const [cloudTitle, setCloudTitle] = useState('');
+  const [selectedCloudSimulationId, setSelectedCloudSimulationId] = useState(null);
 
   const results = useMemo(() => calculateResults(form), [form]);
+  const ownerUser = session?.user ?? null;
+  const isOwnerAuthenticated = Boolean(ownerUser);
 
   useEffect(() => localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(form)), [form]);
   useEffect(() => localStorage.setItem(STORAGE_KEYS.simulations, JSON.stringify(simulations)), [simulations]);
@@ -156,6 +174,39 @@ function App() {
     setMobileNavOpen(false);
     setActiveHelpId(null);
   }, [activePanel]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return undefined;
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const loadCloudSimulations = async () => {
+      setCloudLoading(true);
+      setCloudError('');
+      try {
+        const rows = await fetchVisibleSimulations();
+        setCloudSimulations(rows);
+      } catch (error) {
+        setCloudError(error.message || 'Errore nel caricamento delle simulazioni cloud.');
+      } finally {
+        setCloudLoading(false);
+      }
+    };
+
+    loadCloudSimulations();
+  }, [session]);
 
   const tariffOptions = useMemo(() => tariffs.filter((tariff) => {
     if (!analysisDraft.startMonth && !analysisDraft.endMonth) return true;
@@ -212,6 +263,9 @@ function App() {
     return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
   }, [form, results]);
 
+  const publicCloudSimulations = cloudSimulations.filter((entry) => entry.isPublic);
+  const ownerCloudSimulations = cloudSimulations.filter((entry) => entry.ownerId === ownerUser?.id);
+
   const updateField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   const persistEntry = (type) => {
@@ -248,6 +302,120 @@ function App() {
     setMessage(`Tariffa ${id} eliminata`);
   };
 
+  const loginOwner = async (event) => {
+    event.preventDefault();
+    if (!isSupabaseConfigured || !supabase) {
+      setAuthError('Supabase non configurato. Controlla le variabili ambiente.');
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: ownerLogin.email,
+        password: ownerLogin.password,
+      });
+      if (error) throw error;
+      setOwnerLogin(DEFAULT_OWNER_LOGIN);
+      setMessage('Accesso proprietario eseguito');
+    } catch (error) {
+      setAuthError(error.message || 'Login non riuscito.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const logoutOwner = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setSelectedCloudSimulationId(null);
+    setCloudTitle('');
+    setMessage('Logout eseguito');
+  };
+
+  const saveCloudSimulation = async ({ makePublic = false, updateExisting = false } = {}) => {
+    if (!ownerUser) {
+      setCloudError('Serve il login proprietario per il salvataggio cloud.');
+      return;
+    }
+
+    const title = (cloudTitle || window.prompt('Titolo simulazione cloud') || '').trim();
+    if (!title) return;
+
+    setCloudLoading(true);
+    setCloudError('');
+    try {
+      if (updateExisting && selectedCloudSimulationId) {
+        const updated = await updateCloudSimulation(selectedCloudSimulationId, {
+          title,
+          formSnapshot: form,
+          results,
+          isPublic: makePublic,
+        });
+        setCloudSimulations((current) => [updated, ...current.filter((entry) => entry.id !== updated.id)]);
+        setMessage(`Simulazione cloud ${updated.id} aggiornata`);
+      } else {
+        const created = await createCloudSimulation({
+          title,
+          formSnapshot: form,
+          results,
+          isPublic: makePublic,
+          ownerId: ownerUser.id,
+        });
+        setCloudSimulations((current) => [created, ...current.filter((entry) => entry.id !== created.id)]);
+        setSelectedCloudSimulationId(created.id);
+        setMessage(`Simulazione cloud ${created.id} salvata`);
+      }
+      setCloudTitle(title);
+    } catch (error) {
+      setCloudError(error.message || 'Errore nel salvataggio cloud.');
+    } finally {
+      setCloudLoading(false);
+    }
+  };
+
+  const loadCloudSimulation = (entry) => {
+    setForm(migrateDraft(entry.formSnapshot));
+    setCloudTitle(entry.title);
+    setSelectedCloudSimulationId(entry.id);
+    setActivePanel('dashboard');
+    setMessage(`Simulazione cloud ${entry.id} caricata`);
+  };
+
+  const toggleCloudVisibility = async (entry, nextValue) => {
+    setCloudLoading(true);
+    setCloudError('');
+    try {
+      const updated = await updateCloudSimulation(entry.id, { isPublic: nextValue });
+      setCloudSimulations((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setMessage(`Simulazione ${updated.id} resa ${nextValue ? 'pubblica' : 'privata'}`);
+    } catch (error) {
+      setCloudError(error.message || 'Errore nel cambio visibilità.');
+    } finally {
+      setCloudLoading(false);
+    }
+  };
+
+  const removeCloudSimulation = async (entry) => {
+    if (!window.confirm('Eliminare questa simulazione cloud?')) return;
+    setCloudLoading(true);
+    setCloudError('');
+    try {
+      await deleteCloudSimulation(entry.id);
+      setCloudSimulations((current) => current.filter((item) => item.id !== entry.id));
+      if (selectedCloudSimulationId === entry.id) {
+        setSelectedCloudSimulationId(null);
+        setCloudTitle('');
+      }
+      setMessage(`Simulazione cloud ${entry.id} eliminata`);
+    } catch (error) {
+      setCloudError(error.message || 'Errore nella cancellazione cloud.');
+    } finally {
+      setCloudLoading(false);
+    }
+  };
+
   const PanelButton = ({ id, children }) => (
     <button type="button" className={`nav-button ${activePanel === id ? 'active' : ''}`} onClick={() => setActivePanel(id)}>
       {children}
@@ -262,6 +430,42 @@ function App() {
           <p className="hero-copy">Simulazione e calcolo delle tariffe EV con ripartizione chiara tra spese vive dell’ente, quota ammortamento e margini del gestore.</p>
         </div>
       </header>
+
+      <section className="owner-bar card">
+        <div className="card-title-row owner-title-row">
+          <div>
+            <h2>Accesso proprietario</h2>
+            <p className="owner-copy">Guest: salvataggio solo browser. Proprietario: salvataggio cloud Supabase e gestione visibilità.</p>
+          </div>
+          {isOwnerAuthenticated ? (
+            <div className="owner-status">
+              <span className="status-pill green">Connesso come {ownerUser.email}</span>
+              <button type="button" className="secondary" onClick={logoutOwner}>Logout</button>
+            </div>
+          ) : (
+            <span className="status-pill yellow">Modalità visitatore</span>
+          )}
+        </div>
+        {!isOwnerAuthenticated ? (
+          <form className="owner-login-grid" onSubmit={loginOwner}>
+            <label><span>Email proprietario</span><input type="email" value={ownerLogin.email} onChange={(e) => setOwnerLogin((current) => ({ ...current, email: e.target.value }))} /></label>
+            <label><span>Password</span><input type="password" value={ownerLogin.password} onChange={(e) => setOwnerLogin((current) => ({ ...current, password: e.target.value }))} /></label>
+            <button type="submit" className="primary" disabled={authLoading}>{authLoading ? 'Accesso...' : 'Accesso proprietario'}</button>
+          </form>
+        ) : (
+          <div className="owner-cloud-actions">
+            <label><span>Titolo simulazione cloud</span><input type="text" value={cloudTitle} onChange={(e) => setCloudTitle(e.target.value)} placeholder="Es. Tariffa aprile 2026" /></label>
+            <div className="action-row owner-save-actions">
+              <button type="button" className="primary" onClick={() => saveCloudSimulation({ makePublic: false, updateExisting: false })} disabled={cloudLoading}>Salva su cloud</button>
+              <button type="button" className="secondary" onClick={() => saveCloudSimulation({ makePublic: true, updateExisting: false })} disabled={cloudLoading}>Salva cloud pubblica</button>
+              <button type="button" className="secondary" onClick={() => saveCloudSimulation({ makePublic: false, updateExisting: true })} disabled={!selectedCloudSimulationId || cloudLoading}>Aggiorna cloud</button>
+            </div>
+          </div>
+        )}
+        {!isSupabaseConfigured ? <p className="inline-error">Supabase non configurato: imposta le variabili ambiente VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.</p> : null}
+        {authError ? <p className="inline-error">{authError}</p> : null}
+        {cloudError ? <p className="inline-error">{cloudError}</p> : null}
+      </section>
 
       <nav className="panel-nav">
         <PanelButton id="dashboard">Simulatore</PanelButton>
@@ -369,8 +573,8 @@ function App() {
               <div><span>JCP netto reale</span><strong>{formatCurrency(results.nettoJCP)}</strong></div>
             </div>
             <div className="action-row action-row-split">
-              <button type="button" className="primary" onClick={() => persistEntry('simulation')}>Salva simulazione</button>
-              <button type="button" className="secondary" onClick={() => persistEntry('tariff')}>Salva come tariffa approvata</button>
+              <button type="button" className="primary" onClick={() => persistEntry('simulation')}>Salva nel browser</button>
+              <button type="button" className="secondary" onClick={() => persistEntry('tariff')}>Salva tariffa nel browser</button>
             </div>
           </section>
 
@@ -414,22 +618,65 @@ function App() {
       )}
 
       {activePanel === 'simulations' && (
-        <section className="archive-grid">
-          {simulations.length === 0 ? <div className="empty-state">Nessuna simulazione salvata.</div> : simulations.map((entry) => (
-            <article key={entry.id} className="archive-card">
-              <div><h3>{entry.title || 'Simulazione salvata'}</h3><p>{entry.id} · {new Date(entry.savedAt).toLocaleString('it-IT')}</p></div>
-              <ul>
-                <li>Netto ente: {formatCurrency(entry.results.nettoEnte ?? 0)}</li>
-                <li>Spese vive totali ente: {formatCurrency(entry.results.costoVivoTotale ?? 0)}</li>
-                <li>Saldo spese vive ente: {formatCurrency(entry.results.saldoSpeseVive ?? 0)}</li>
-              </ul>
-              <div className="action-row archive-actions">
-                <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Riapri simulazione</button>
-                <a className="download-button" href={createSpreadsheetHref(entry.formSnapshot, entry.results)} download={`${entry.id}.csv`}>Scarica CSV</a>
-                <button type="button" className="secondary danger-soft" onClick={() => deleteSimulation(entry.id)}>Elimina</button>
+        <section className="stacked-panels">
+          <article className="card">
+            <div className="card-title-row">
+              <h2>Simulazioni locali browser</h2>
+              <span className="status-pill yellow">Solo questo dispositivo</span>
+            </div>
+            {simulations.length === 0 ? <div className="empty-state">Nessuna simulazione locale salvata.</div> : (
+              <div className="archive-grid">
+                {simulations.map((entry) => (
+                  <article key={entry.id} className="archive-card">
+                    <div><h3>{entry.title || 'Simulazione salvata'}</h3><p>{entry.id} · {new Date(entry.savedAt).toLocaleString('it-IT')}</p></div>
+                    <ul>
+                      <li>Netto ente: {formatCurrency(entry.results.nettoEnte ?? 0)}</li>
+                      <li>Spese vive totali ente: {formatCurrency(entry.results.costoVivoTotale ?? 0)}</li>
+                      <li>Saldo spese vive ente: {formatCurrency(entry.results.saldoSpeseVive ?? 0)}</li>
+                    </ul>
+                    <div className="action-row archive-actions">
+                      <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Riapri simulazione</button>
+                      <a className="download-button" href={createSpreadsheetHref(entry.formSnapshot, entry.results)} download={`${entry.id}.csv`}>Scarica CSV</a>
+                      <button type="button" className="secondary danger-soft" onClick={() => deleteSimulation(entry.id)}>Elimina</button>
+                    </div>
+                  </article>
+                ))}
               </div>
-            </article>
-          ))}
+            )}
+          </article>
+
+          <article className="card">
+            <div className="card-title-row">
+              <h2>Simulazioni cloud Supabase</h2>
+              <span className="status-pill green">Pubbliche{isOwnerAuthenticated ? ' + mie' : ''}</span>
+            </div>
+            {cloudLoading ? <div className="empty-state">Caricamento simulazioni cloud...</div> : null}
+            {!cloudLoading && publicCloudSimulations.length === 0 && !isOwnerAuthenticated ? <div className="empty-state">Nessuna simulazione pubblica disponibile.</div> : null}
+            {!cloudLoading && (publicCloudSimulations.length > 0 || ownerCloudSimulations.length > 0) ? (
+              <div className="archive-grid">
+                {cloudSimulations.map((entry) => (
+                  <article key={entry.id} className="archive-card">
+                    <div><h3>{entry.title}</h3><p>{entry.id} · {new Date(entry.updatedAt || entry.savedAt).toLocaleString('it-IT')}</p></div>
+                    <ul>
+                      <li>Visibilità: {entry.isPublic ? 'Pubblica' : 'Privata'}</li>
+                      <li>Netto ente: {formatCurrency(entry.results?.nettoEnte ?? 0)}</li>
+                      <li>Quota ammortamento totale: {formatCurrency(entry.results?.targetRecuperoTotale ?? 0)}</li>
+                    </ul>
+                    <div className="action-row archive-actions cloud-actions">
+                      <button type="button" className="secondary" onClick={() => loadCloudSimulation(entry)}>Apri</button>
+                      <a className="download-button" href={createSpreadsheetHref(entry.formSnapshot, entry.results)} download={`${entry.id}.csv`}>Scarica CSV</a>
+                      {entry.ownerId === ownerUser?.id ? (
+                        <>
+                          <button type="button" className="secondary" onClick={() => toggleCloudVisibility(entry, !entry.isPublic)}>{entry.isPublic ? 'Rendi privata' : 'Rendi pubblica'}</button>
+                          <button type="button" className="secondary danger-soft" onClick={() => removeCloudSimulation(entry)}>Elimina cloud</button>
+                        </>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </article>
         </section>
       )}
 

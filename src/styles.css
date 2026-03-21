@@ -117,8 +117,19 @@ th { color:#6b7280; font-size:.78rem; text-transform:uppercase; letter-spacing:.
 .archive-card ul { padding-left: 18px; color:#4b5563; }
 .empty-state { border-radius: 24px; padding: 28px; color:#4b5563; }
 .manual ol { color:#374151; line-height: 1.7; padding-left: 20px; }
+.owner-bar { margin: 18px 0 22px; }
+.owner-title-row { align-items: flex-start; }
+.owner-copy { margin: 6px 0 0; color: #6b7280; }
+.owner-status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.owner-login-grid, .owner-cloud-actions { display: grid; gap: 14px; }
+.owner-login-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.owner-save-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.inline-error { margin: 12px 0 0; color: #b42318; }
+.stacked-panels { display: grid; gap: 18px; }
+.cloud-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
 @media (max-width: 980px) {
+  .owner-login-grid, .owner-save-actions, .cloud-actions { grid-template-columns: 1fr; }
   .span-two { grid-column: auto; }
   .grid-layout, .analysis-layout, .metric-grid { grid-template-columns: 1fr; }
   .panel-nav { grid-template-columns: 1fr 1fr; }
