@@ -7,7 +7,7 @@ export const DEFAULT_INFRA_ITEMS = [
     dataInizio: '2026-01-01',
     dataFine: '2026-12-31',
     metodoRiparto: 'lineare_tempo',
-    kwhPrevistiPeriodo: 0,
+    kwhPrevistiTotali: 0,
     note: 'Voce modificabile dall’utente',
   },
 ];
@@ -25,6 +25,7 @@ export const DEFAULT_FORM = {
   calcMode: 'live_plus_infra',
   periodStart: '2026-01-01',
   periodEnd: '2026-01-31',
+  periodExpectedKwh: 400,
   infrastructureItems: DEFAULT_INFRA_ITEMS,
 };
 
@@ -102,7 +103,7 @@ export function migrateDraft(raw) {
       dataInizio: merged.periodStart,
       dataFine: merged.periodEnd,
       metodoRiparto: 'per_kwh_previsti',
-      kwhPrevistiPeriodo: Math.max(Number(raw.kwh) || DEFAULT_FORM.kwh, 1),
+      kwhPrevistiTotali: Math.max(Number(raw.kwh) || DEFAULT_FORM.kwh, 1),
       note: 'Migrato dal precedente campo ammortamento unitario',
     });
   }
@@ -115,54 +116,72 @@ export function migrateDraft(raw) {
       dataInizio: merged.periodStart,
       dataFine: merged.periodEnd,
       metodoRiparto: 'per_kwh_previsti',
-      kwhPrevistiPeriodo: Math.max(Number(raw.kwh) || DEFAULT_FORM.kwh, 1),
+      kwhPrevistiTotali: Math.max(Number(raw.kwh) || DEFAULT_FORM.kwh, 1),
       note: 'Migrato dal precedente campo quota gestione unitaria',
     });
   }
 
-  merged.infrastructureItems = Array.isArray(raw?.infrastructureItems) && raw.infrastructureItems.length
+  const incomingInfrastructure = Array.isArray(raw?.infrastructureItems) && raw.infrastructureItems.length
     ? raw.infrastructureItems
     : legacyInfra.length
       ? legacyInfra
       : DEFAULT_INFRA_ITEMS;
 
+  merged.infrastructureItems = incomingInfrastructure.map((item, index) => ({
+    id: item.id || `infra-${index + 1}`,
+    descrizione: item.descrizione || '',
+    categoria: item.categoria || 'investimento',
+    importoNetto: clampNonNegative(item.importoNetto),
+    dataInizio: item.dataInizio || merged.periodStart,
+    dataFine: item.dataFine || item.dataInizio || merged.periodEnd,
+    metodoRiparto: item.metodoRiparto || 'lineare_tempo',
+    kwhPrevistiTotali: clampNonNegative(item.kwhPrevistiTotali ?? item.kwhPrevistiPeriodo),
+    note: item.note || '',
+  }));
+
+  merged.periodExpectedKwh = clampNonNegative(raw?.periodExpectedKwh ?? raw?.kwhPrevistiPeriodo ?? DEFAULT_FORM.periodExpectedKwh);
+
   return merged;
 }
 
-export function calculateInfrastructureTargets(items, periodStart, periodEnd, kwh) {
-  const simulatedKwh = clampNonNegative(kwh);
+export function calculateInfrastructureTargets(items, periodStart, periodEnd, simulatedKwh, periodExpectedKwh) {
+  const realKwh = clampNonNegative(simulatedKwh);
+  const plannedPeriodKwh = clampNonNegative(periodExpectedKwh);
+
   const rows = (items || []).map((item) => {
     const importoNetto = clampNonNegative(item.importoNetto);
     const totalDays = daysBetweenInclusive(item.dataInizio, item.dataFine || item.dataInizio);
     const overlappedDays = overlapDays(item.dataInizio, item.dataFine || item.dataInizio, periodStart, periodEnd);
+    const kwhPrevistiTotali = clampNonNegative(item.kwhPrevistiTotali);
     let quotaPeriodo = 0;
-    let quotaUnitaria = 0;
+    let quotaUnitariaPeriodo = 0;
 
     if (item.metodoRiparto === 'lineare_tempo') {
       quotaPeriodo = totalDays > 0 ? (importoNetto * overlappedDays) / totalDays : 0;
-      quotaUnitaria = simulatedKwh > 0 ? quotaPeriodo / simulatedKwh : 0;
     } else if (item.metodoRiparto === 'per_kwh_previsti') {
-      const kwhPrevisti = clampNonNegative(item.kwhPrevistiPeriodo);
-      quotaUnitaria = kwhPrevisti > 0 ? importoNetto / kwhPrevisti : 0;
-      quotaPeriodo = quotaUnitaria * simulatedKwh;
+      quotaUnitariaPeriodo = kwhPrevistiTotali > 0 ? importoNetto / kwhPrevistiTotali : 0;
+      quotaPeriodo = quotaUnitariaPeriodo * plannedPeriodKwh;
     } else if (item.metodoRiparto === 'una_tantum') {
       quotaPeriodo = fallsInPeriod(item, periodStart, periodEnd) ? importoNetto : 0;
-      quotaUnitaria = simulatedKwh > 0 ? quotaPeriodo / simulatedKwh : 0;
     }
+
+    const quotaUnitSimulata = realKwh > 0 ? quotaPeriodo / realKwh : 0;
 
     return {
       ...item,
       quotaPeriodo,
-      quotaUnitaria,
+      quotaUnitariaPeriodo,
+      quotaUnitSimulata,
       overlappedDays,
       totalDays,
+      kwhPrevistiTotali,
     };
   });
 
   const targetRecuperoTotale = rows.reduce((sum, row) => sum + row.quotaPeriodo, 0);
-  const targetRecuperoUnitario = simulatedKwh > 0 ? targetRecuperoTotale / simulatedKwh : 0;
+  const targetRecuperoUnitario = realKwh > 0 ? targetRecuperoTotale / realKwh : 0;
 
-  return { rows, targetRecuperoTotale, targetRecuperoUnitario };
+  return { rows, targetRecuperoTotale, targetRecuperoUnitario, periodExpectedKwh: plannedPeriodKwh };
 }
 
 export function calculateResults(form) {
@@ -177,7 +196,13 @@ export function calculateResults(form) {
 
   const costoVivoUnitario = costoEnergia * (1 + perditeRete / 100) + altriCostiViviUnitari;
   const costoVivoTotale = costoVivoUnitario * kwh;
-  const infraTargets = calculateInfrastructureTargets(form.infrastructureItems, form.periodStart, form.periodEnd, kwh);
+  const infraTargets = calculateInfrastructureTargets(
+    form.infrastructureItems,
+    form.periodStart,
+    form.periodEnd,
+    kwh,
+    form.periodExpectedKwh,
+  );
 
   const nettoEnteTarget =
     form.calcMode === 'live_only'
@@ -186,15 +211,16 @@ export function calculateResults(form) {
         ? costoVivoTotale + infraTargets.targetRecuperoTotale
         : 0;
 
+  const quotaEnte = 1 - percentualeJCP / 100;
   let imponibileTotale = 0;
   if (form.calcMode === 'manual_gross') {
     imponibileTotale = (clampNonNegative(form.targetLordoManuale) * kwh) / (1 + iva / 100);
   } else {
-    imponibileTotale = nettoEnteTarget / (1 - percentualeJCP / 100 || 1);
+    imponibileTotale = quotaEnte > 0 ? nettoEnteTarget / quotaEnte : 0;
   }
 
   const lordoCliente = imponibileTotale * (1 + iva / 100);
-  const nettoEnte = imponibileTotale * (1 - percentualeJCP / 100);
+  const nettoEnte = imponibileTotale * quotaEnte;
   const lordoJCP = imponibileTotale * (percentualeJCP / 100);
   const stripeCost = imponibileTotale * (stripePerc / 100) + stripeFisso;
   const nettoJCP = lordoJCP - stripeCost;
@@ -212,6 +238,7 @@ export function calculateResults(form) {
     targetRecuperoTotale: infraTargets.targetRecuperoTotale,
     targetRecuperoUnitario: infraTargets.targetRecuperoUnitario,
     infrastructureRows: infraTargets.rows,
+    periodExpectedKwh: infraTargets.periodExpectedKwh,
     nettoEnte,
     lordoCliente,
     imponibileTotale,

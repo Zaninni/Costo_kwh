@@ -12,15 +12,15 @@ body { margin: 0; min-width: 320px; background: transparent; }
 button, input, select, textarea { font: inherit; }
 #root { min-height: 100vh; }
 .app-shell { max-width: 1480px; margin: 0 auto; padding: 24px; }
-.hero-card, .card, .table-card, .archive-card, .empty-state, .toast {
+.hero-card, .card, .table-card, .archive-card, .empty-state, .toast, .modal-card {
   background: rgba(12, 22, 40, 0.78);
   border: 1px solid rgba(135, 161, 197, 0.18);
   box-shadow: 0 18px 70px rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(14px);
 }
 .hero-card { padding: 28px; border-radius: 28px; display: flex; justify-content: space-between; gap: 24px; }
-.hero-card h1 { margin: 6px 0 8px; font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1.05; }
-.hero-copy { max-width: 780px; color: #adc2df; }
+.hero-card h1 { margin: 6px 0 8px; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.05; }
+.hero-copy, .helper-copy { max-width: 780px; color: #adc2df; line-height: 1.6; }
 .eyebrow { text-transform: uppercase; letter-spacing: .18em; font-size: .78rem; color: #7fb6ff; margin: 0; }
 .hero-badges, .inline-actions, .action-row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
 .hero-badges span, .tag, .status-pill {
@@ -45,12 +45,12 @@ button, input, select, textarea { font: inherit; }
 .dashboard-grid { align-items: start; }
 .second-row { margin-top: 18px; }
 .span-two { grid-column: span 2; }
-.card, .table-card, .archive-card, .manual { border-radius: 26px; padding: 22px; }
+.span-full { grid-column: 1 / -1; }
+.card, .table-card, .archive-card, .manual, .modal-card { border-radius: 26px; padding: 22px; }
 .card-title-row, .table-head { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom: 18px; }
 .card-title-row h2, .table-head h3 { margin:0; font-size:1.15rem; }
-.field-grid, .period-grid, .metric-grid, .mini-metrics { display:grid; gap:14px; }
+.field-grid, .metric-grid, .mini-metrics { display:grid; gap:14px; }
 .field-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-.period-grid { grid-template-columns: repeat(2, minmax(0,1fr)); margin-bottom: 14px; }
 .metric-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
 .mini-metrics.two-col { grid-template-columns: repeat(2, minmax(0,1fr)); margin-top: 16px; }
 .single-column { grid-template-columns: 1fr; }
@@ -72,25 +72,34 @@ textarea { resize: vertical; }
 .warning { outline:1px solid rgba(251, 191, 36, 0.35); }
 .table-head span { color:#92abd0; }
 .table-scroll, .infrastructure-table { overflow:auto; }
-table { width:100%; border-collapse: collapse; min-width: 960px; }
+table { width:100%; border-collapse: collapse; min-width: 980px; }
 th, td { padding: 14px; text-align:left; border-bottom:1px solid rgba(255,255,255,.08); vertical-align: top; }
 th { color:#8cadd2; font-size:.78rem; text-transform:uppercase; letter-spacing:.12em; }
+td small { display:block; margin-top:8px; color:#92abd0; }
 .archive-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:18px; }
 .archive-card h3 { margin: 2px 0 6px; }
 .archive-card ul { padding-left: 18px; color:#bcd0eb; }
 .empty-state { border-radius: 24px; padding: 28px; color:#b9cae4; }
 .manual ol { color:#c8daf2; line-height: 1.7; padding-left: 20px; }
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(3, 8, 18, 0.7); display: flex; align-items: flex-start; justify-content: center;
+  padding: 32px 18px; z-index: 10; overflow: auto;
+}
+.modal-card { width: min(1320px, 100%); }
+.stacked-inputs { display:grid; gap:10px; }
 
 @media (max-width: 1240px) {
   .grid-layout, .analysis-layout, .metric-grid { grid-template-columns: 1fr 1fr; }
   .span-two { grid-column: auto; }
 }
 @media (max-width: 900px) {
-  .grid-layout, .analysis-layout, .field-grid, .period-grid, .metric-grid, .panel-nav, .mini-metrics.two-col { grid-template-columns: 1fr; }
-  .hero-card { flex-direction: column; }
+  .grid-layout, .analysis-layout, .field-grid, .metric-grid, .panel-nav, .mini-metrics.two-col { grid-template-columns: 1fr; }
+  .hero-card, .card-title-row, .table-head { flex-direction: column; align-items: flex-start; }
+  .span-full { grid-column: auto; }
 }
 @media (max-width: 720px) {
   .app-shell { padding: 14px; }
   .hero-card { padding: 20px; border-radius: 24px; }
-  .card, .table-card, .archive-card, .manual { padding: 18px; border-radius: 22px; }
+  .card, .table-card, .archive-card, .manual, .modal-card { padding: 18px; border-radius: 22px; }
+  .modal-backdrop { padding: 14px; }
 }
