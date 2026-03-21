@@ -32,6 +32,12 @@ const DEFAULT_OWNER_LOGIN = {
   password: '',
 };
 
+const ACCESS_STATES = {
+  pending: 'pending',
+  login: 'login',
+  guest: 'guest',
+};
+
 const DEFAULT_ANALYSIS = {
   startMonth: '',
   endMonth: '',
@@ -148,6 +154,7 @@ function App() {
   const [activeHelpId, setActiveHelpId] = useState(null);
   const [session, setSession] = useState(null);
   const [ownerLogin, setOwnerLogin] = useState(DEFAULT_OWNER_LOGIN);
+  const [accessState, setAccessState] = useState(ACCESS_STATES.pending);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [cloudSimulations, setCloudSimulations] = useState([]);
@@ -159,6 +166,7 @@ function App() {
   const results = useMemo(() => calculateResults(form), [form]);
   const ownerUser = session?.user ?? null;
   const isOwnerAuthenticated = Boolean(ownerUser);
+  const showAccessCard = !isOwnerAuthenticated && accessState !== ACCESS_STATES.guest;
 
   useEffect(() => localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify(form)), [form]);
   useEffect(() => localStorage.setItem(STORAGE_KEYS.simulations, JSON.stringify(simulations)), [simulations]);
@@ -318,6 +326,7 @@ function App() {
       });
       if (error) throw error;
       setOwnerLogin(DEFAULT_OWNER_LOGIN);
+      setAccessState(ACCESS_STATES.pending);
       setMessage('Accesso proprietario eseguito');
     } catch (error) {
       setAuthError(error.message || 'Login non riuscito.');
@@ -329,6 +338,7 @@ function App() {
   const logoutOwner = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
+    setAccessState(ACCESS_STATES.pending);
     setSelectedCloudSimulationId(null);
     setCloudTitle('');
     setMessage('Logout eseguito');
@@ -425,47 +435,53 @@ function App() {
   return (
     <div className="app-shell">
       <header className="hero-card">
-        <div>
-          <h1>Tariffe EV LNF</h1>
-          <p className="hero-copy">Simulazione e calcolo delle tariffe EV con ripartizione chiara tra spese vive dell’ente, quota ammortamento e margini del gestore.</p>
-        </div>
-      </header>
-
-      <section className="owner-bar card">
-        <div className="card-title-row owner-title-row">
+        <div className="hero-head">
           <div>
-            <h2>Accesso proprietario</h2>
-            <p className="owner-copy">Guest: salvataggio solo browser. Proprietario: salvataggio cloud Supabase e gestione visibilità.</p>
+            <h1>Tariffe EV LNF</h1>
+            <p className="hero-copy">Simulazione e calcolo delle tariffe EV con ripartizione chiara tra spese vive dell’ente, quota ammortamento e margini del gestore.</p>
           </div>
           {isOwnerAuthenticated ? (
             <div className="owner-status">
-              <span className="status-pill green">Connesso come {ownerUser.email}</span>
+              <span className="status-pill green">Autenticato</span>
               <button type="button" className="secondary" onClick={logoutOwner}>Logout</button>
             </div>
-          ) : (
-            <span className="status-pill yellow">Modalità visitatore</span>
-          )}
+          ) : accessState === ACCESS_STATES.guest ? (
+            <span className="status-pill yellow">Guest</span>
+          ) : null}
         </div>
-        {!isOwnerAuthenticated ? (
-          <form className="owner-login-grid" onSubmit={loginOwner}>
-            <label><span>Email proprietario</span><input type="email" value={ownerLogin.email} onChange={(e) => setOwnerLogin((current) => ({ ...current, email: e.target.value }))} /></label>
-            <label><span>Password</span><input type="password" value={ownerLogin.password} onChange={(e) => setOwnerLogin((current) => ({ ...current, password: e.target.value }))} /></label>
-            <button type="submit" className="primary" disabled={authLoading}>{authLoading ? 'Accesso...' : 'Accesso proprietario'}</button>
-          </form>
-        ) : (
-          <div className="owner-cloud-actions">
-            <label><span>Titolo simulazione cloud</span><input type="text" value={cloudTitle} onChange={(e) => setCloudTitle(e.target.value)} placeholder="Es. Tariffa aprile 2026" /></label>
-            <div className="action-row owner-save-actions">
-              <button type="button" className="primary" onClick={() => saveCloudSimulation({ makePublic: false, updateExisting: false })} disabled={cloudLoading}>Salva su cloud</button>
-              <button type="button" className="secondary" onClick={() => saveCloudSimulation({ makePublic: true, updateExisting: false })} disabled={cloudLoading}>Salva cloud pubblica</button>
-              <button type="button" className="secondary" onClick={() => saveCloudSimulation({ makePublic: false, updateExisting: true })} disabled={!selectedCloudSimulationId || cloudLoading}>Aggiorna cloud</button>
+      </header>
+
+      {showAccessCard ? (
+        <section className="owner-bar card">
+          <div className="card-title-row owner-title-row">
+            <div>
+              <h2>Accesso richiesto</h2>
+              <p className="owner-copy">Per salvare i dati su cloud è necessario autenticarsi. In alternativa puoi proseguire come guest e salvare i dati solo nel browser.</p>
             </div>
           </div>
-        )}
-        {!isSupabaseConfigured ? <p className="inline-error">Supabase non configurato: imposta le variabili ambiente VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.</p> : null}
-        {authError ? <p className="inline-error">{authError}</p> : null}
-        {cloudError ? <p className="inline-error">{cloudError}</p> : null}
-      </section>
+          {accessState === ACCESS_STATES.login ? (
+            <form className="owner-login-stack" onSubmit={loginOwner}>
+              <div className="owner-login-grid">
+                <label><span>Email proprietario</span><input type="email" value={ownerLogin.email} onChange={(e) => setOwnerLogin((current) => ({ ...current, email: e.target.value }))} /></label>
+                <label><span>Password</span><input type="password" value={ownerLogin.password} onChange={(e) => setOwnerLogin((current) => ({ ...current, password: e.target.value }))} /></label>
+              </div>
+              <div className="action-row owner-access-actions">
+                <button type="submit" className="primary" disabled={authLoading}>{authLoading ? 'Login in corso...' : 'Login'}</button>
+                <button type="button" className="secondary" onClick={() => { setAccessState(ACCESS_STATES.guest); setAuthError(''); }}>Continua come guest</button>
+              </div>
+            </form>
+          ) : (
+            <div className="action-row owner-access-actions">
+              <button type="button" className="primary" onClick={() => setAccessState(ACCESS_STATES.login)}>Effettua login</button>
+              <button type="button" className="secondary" onClick={() => { setAccessState(ACCESS_STATES.guest); setAuthError(''); }}>Continua come guest</button>
+            </div>
+          )}
+          {!isSupabaseConfigured ? <p className="inline-error">Supabase non configurato: imposta le variabili ambiente VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.</p> : null}
+          {authError ? <p className="inline-error">{authError}</p> : null}
+        </section>
+      ) : null}
+
+      {cloudError ? <p className="inline-error">{cloudError}</p> : null}
 
       <nav className="panel-nav">
         <PanelButton id="dashboard">Simulatore</PanelButton>
@@ -572,9 +588,21 @@ function App() {
               <div className={results.coperturaTarget >= 1 ? 'positive' : 'warning'}><span>Copertura quota ammortamento</span><strong>{formatNumber(results.coperturaTarget * 100, 1)}%</strong></div>
               <div><span>JCP netto reale</span><strong>{formatCurrency(results.nettoJCP)}</strong></div>
             </div>
-            <div className="action-row action-row-split">
-              <button type="button" className="primary" onClick={() => persistEntry('simulation')}>Salva nel browser</button>
-              <button type="button" className="secondary" onClick={() => persistEntry('tariff')}>Salva tariffa nel browser</button>
+            <div className="owner-cloud-actions compact-top">
+              {isOwnerAuthenticated ? (
+                <label><span>Titolo simulazione cloud</span><input type="text" value={cloudTitle} onChange={(e) => setCloudTitle(e.target.value)} placeholder="Es. Tariffa aprile 2026" /></label>
+              ) : null}
+              <div className="action-row action-row-split owner-save-actions">
+                <button type="button" className="primary" onClick={() => persistEntry('simulation')}>Salva nel browser</button>
+                <button type="button" className="secondary" onClick={() => persistEntry('tariff')}>Salva tariffa nel browser</button>
+                {isOwnerAuthenticated ? (
+                  <>
+                    <button type="button" className="secondary" onClick={() => saveCloudSimulation({ makePublic: false, updateExisting: false })} disabled={cloudLoading}>Salva su cloud</button>
+                    <button type="button" className="secondary" onClick={() => saveCloudSimulation({ makePublic: true, updateExisting: false })} disabled={cloudLoading}>Salva cloud pubblica</button>
+                    <button type="button" className="secondary" onClick={() => saveCloudSimulation({ makePublic: false, updateExisting: true })} disabled={!selectedCloudSimulationId || cloudLoading}>Aggiorna cloud</button>
+                  </>
+                ) : null}
+              </div>
             </div>
           </section>
 
