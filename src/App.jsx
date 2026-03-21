@@ -49,15 +49,32 @@ const healthDescriptions = {
   green: 'Verde · spese vive coperte e quota ammortamento pienamente coperta.',
 };
 
-function HelpButton({ title, children }) {
+function HelpButton({ id, title, children, activeHelpId, setActiveHelpId }) {
+  const isOpen = activeHelpId === id;
+
   return (
-    <details className="help-popover">
-      <summary className="help-trigger" aria-label={`Apri aiuto: ${title}`}>?</summary>
-      <div className="help-panel">
-        <strong>{title}</strong>
-        <p>{children}</p>
-      </div>
-    </details>
+    <div className="help-popover">
+      <button
+        type="button"
+        className="help-trigger"
+        aria-label={`Apri aiuto: ${title}`}
+        aria-expanded={isOpen}
+        onClick={() => setActiveHelpId(isOpen ? null : id)}
+      >
+        ?
+      </button>
+      {isOpen ? (
+        <div className="help-panel" role="dialog" aria-label={title}>
+          <div className="help-panel-head">
+            <strong>{title}</strong>
+            <button type="button" className="help-close" aria-label="Chiudi aiuto" onClick={() => setActiveHelpId(null)}>
+              ×
+            </button>
+          </div>
+          <p>{children}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -120,6 +137,8 @@ function App() {
   }));
   const [activePanel, setActivePanel] = useState('dashboard');
   const [message, setMessage] = useState('');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activeHelpId, setActiveHelpId] = useState(null);
 
   const results = useMemo(() => calculateResults(form), [form]);
 
@@ -132,6 +151,11 @@ function App() {
     const timeout = setTimeout(() => setMessage(''), 2400);
     return () => clearTimeout(timeout);
   }, [message]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+    setActiveHelpId(null);
+  }, [activePanel]);
 
   const tariffOptions = useMemo(() => tariffs.filter((tariff) => {
     if (!analysisDraft.startMonth && !analysisDraft.endMonth) return true;
@@ -211,6 +235,19 @@ function App() {
     setMessage(`Configurazione ${entry.id} caricata`);
   };
 
+  const deleteSimulation = (id) => {
+    if (!window.confirm('Eliminare questa simulazione salvata?')) return;
+    setSimulations((current) => current.filter((entry) => entry.id !== id));
+    setMessage(`Simulazione ${id} eliminata`);
+  };
+
+  const deleteTariff = (id) => {
+    if (!window.confirm('Vuoi eliminare questa tariffa applicata?')) return;
+    if (!window.confirm('Conferma di nuovo: eliminare definitivamente la tariffa applicata?')) return;
+    setTariffs((current) => current.filter((entry) => entry.id !== id));
+    setMessage(`Tariffa ${id} eliminata`);
+  };
+
   const PanelButton = ({ id, children }) => (
     <button type="button" className={`nav-button ${activePanel === id ? 'active' : ''}`} onClick={() => setActivePanel(id)}>
       {children}
@@ -236,13 +273,25 @@ function App() {
 
       <div className="mobile-pagebar">
         <div className="mobile-page-current">{PANEL_OPTIONS.find((item) => item.id === activePanel)?.label}</div>
-        <label className="mobile-page-select">
-          <span>Vai a</span>
-          <select value={activePanel} onChange={(e) => setActivePanel(e.target.value)}>
-            {PANEL_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select>
-        </label>
+        <button type="button" className="mobile-page-button" onClick={() => setMobileNavOpen((current) => !current)} aria-expanded={mobileNavOpen}>
+          Sezioni
+        </button>
       </div>
+
+      {mobileNavOpen ? (
+        <div className="mobile-nav-sheet">
+          {PANEL_OPTIONS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`mobile-nav-item ${activePanel === item.id ? 'active' : ''}`}
+              onClick={() => setActivePanel(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {message ? <div className="toast">{message}</div> : null}
 
@@ -252,7 +301,7 @@ function App() {
             <article className="card">
               <div className="card-title-row">
                 <h2>Modalità di calcolo prezzo</h2>
-                <HelpButton title="Modalità di calcolo">Scegli se vuoi coprire solo le spese vive, includere anche la quota ammortamento oppure verificare un prezzo lordo già deciso.</HelpButton>
+                <HelpButton id="help-modalita" title="Modalità di calcolo" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Scegli se vuoi coprire solo le spese vive, includere anche la quota ammortamento oppure verificare un prezzo lordo già deciso.</HelpButton>
               </div>
               <div className="mode-stack">
                 {MODE_OPTIONS.map((mode) => (
@@ -270,7 +319,7 @@ function App() {
             <article className="card">
               <div className="card-title-row">
                 <h2>Costi ente</h2>
-                <HelpButton title="Costi ente">Inserisci qui i costi vivi per kWh, la quota ammortamento per kWh, i kWh totali simulati e il numero di ricariche usato per moltiplicare il costo fisso Stripe.</HelpButton>
+                <HelpButton id="help-costi" title="Costi ente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Inserisci qui i costi vivi per kWh, la quota ammortamento per kWh, i kWh totali simulati e il numero di ricariche usato per moltiplicare il costo fisso Stripe.</HelpButton>
               </div>
               <div className="field-grid">
                 <label><span>Costo energia netto IVA (€/kWh)</span><input type="number" step="0.001" value={form.costoEnergia} onChange={(e) => updateField('costoEnergia', Number(e.target.value))} /></label>
@@ -290,7 +339,7 @@ function App() {
             <article className="card span-two">
               <div className="card-title-row">
                 <h2>Impostazioni gestore e IVA</h2>
-                <HelpButton title="Impostazioni gestore e IVA">Qui imposti i parametri lato gestore: commissione JCP, commissioni Stripe e aliquota IVA. Questi valori influenzano la ripartizione economica ma non la scelta della modalità.</HelpButton>
+                <HelpButton id="help-gestore" title="Impostazioni gestore e IVA" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Qui imposti i parametri lato gestore: commissione JCP, commissioni Stripe e aliquota IVA. Questi valori influenzano la ripartizione economica ma non la scelta della modalità.</HelpButton>
               </div>
               <div className="field-grid">
                 <label><span>Commissione JCP (%)</span><input type="number" value={form.percentualeJCP} onChange={(e) => updateField('percentualeJCP', Number(e.target.value))} /></label>
@@ -306,7 +355,7 @@ function App() {
               <h2>Metriche economiche</h2>
               <div className="title-actions">
                 <span className={`status-pill ${results.health}`}>{healthDescriptions[results.health]}</span>
-                <HelpButton title="Metriche economiche">Le spese vive dicono se l’ente perde davvero. La quota ammortamento totale è l’obiettivo infrastrutturale del caso simulato. La quota ammortamento coperta è solo la parte che resta dopo avere coperto tutte le spese vive.</HelpButton>
+                <HelpButton id="help-metriche" title="Metriche economiche" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Le spese vive dicono se l’ente perde davvero. La quota ammortamento totale è l’obiettivo infrastrutturale del caso simulato. La quota ammortamento coperta è solo la parte che resta dopo avere coperto tutte le spese vive.</HelpButton>
               </div>
             </div>
             <div className="metric-grid">
@@ -330,7 +379,7 @@ function App() {
               <div>
                 <h3>Dati di sintesi simulazione</h3>
               </div>
-              <HelpButton title="Dati di sintesi simulazione">Questa tabella riassume i dati principali del caso simulato, compreso il numero di ricariche utilizzato per il costo fisso Stripe.</HelpButton>
+              <HelpButton id="help-sintesi" title="Dati di sintesi simulazione" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Questa tabella riassume i dati principali del caso simulato, compreso il numero di ricariche utilizzato per il costo fisso Stripe.</HelpButton>
             </div>
             <div className="table-scroll">
               <table>
@@ -377,6 +426,7 @@ function App() {
               <div className="action-row archive-actions">
                 <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Riapri simulazione</button>
                 <a className="download-button" href={createSpreadsheetHref(entry.formSnapshot, entry.results)} download={`${entry.id}.csv`}>Scarica CSV</a>
+                <button type="button" className="secondary danger-soft" onClick={() => deleteSimulation(entry.id)}>Elimina</button>
               </div>
             </article>
           ))}
@@ -396,6 +446,7 @@ function App() {
               <div className="action-row archive-actions">
                 <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Applica tariffa al simulatore</button>
                 <a className="download-button" href={createSpreadsheetHref(entry.formSnapshot, entry.results)} download={`${entry.id}.csv`}>Scarica CSV</a>
+                <button type="button" className="secondary danger-soft" onClick={() => deleteTariff(entry.id)}>Elimina</button>
               </div>
             </article>
           ))}
@@ -407,7 +458,7 @@ function App() {
           <article className="card">
             <div className="card-title-row">
               <h2>Tool utile ente</h2>
-              <HelpButton title="Tool utile ente">Seleziona una tariffa approvata, inserisci i dati reali del periodo e verifica quanta quota ammortamento è stata effettivamente coperta dopo le spese vive.</HelpButton>
+              <HelpButton id="help-analisi" title="Tool utile ente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Seleziona una tariffa approvata, inserisci i dati reali del periodo e verifica quanta quota ammortamento è stata effettivamente coperta dopo le spese vive.</HelpButton>
             </div>
             <div className="field-grid">
               <label><span>Mese iniziale</span><input type="month" value={analysisDraft.startMonth} onChange={(e) => setAnalysisDraft((current) => ({ ...current, startMonth: e.target.value }))} /></label>
@@ -425,7 +476,7 @@ function App() {
           <article className="card">
             <div className="card-title-row">
               <h2>Anteprima fine processo</h2>
-              <HelpButton title="Anteprima fine processo">Questi valori mostrano il risultato economico reale del periodo analizzato usando i dati corretti che hai inserito.</HelpButton>
+              <HelpButton id="help-anteprima" title="Anteprima fine processo" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Questi valori mostrano il risultato economico reale del periodo analizzato usando i dati corretti che hai inserito.</HelpButton>
             </div>
             {!analysisPreview || !selectedTariff ? (
               <div className="empty-state">Salva almeno una tariffa approvata per utilizzare il tool.</div>
