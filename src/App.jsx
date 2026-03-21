@@ -91,6 +91,12 @@ function buildSpreadsheetCsv(form, results) {
     .join('\n');
 }
 
+
+function createSpreadsheetHref(snapshotForm, snapshotResults) {
+  const csv = buildSpreadsheetCsv(migrateDraft(snapshotForm), snapshotResults);
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+}
+
 function App() {
   const [form, setForm] = useState(() => {
     const current = safeParse(localStorage.getItem(STORAGE_KEYS.draft), null);
@@ -263,7 +269,7 @@ function App() {
               )}
             </article>
 
-            <article className="card">
+            <article className="card span-two">
               <div className="card-title-row">
                 <h2>Impostazioni gestore e IVA</h2>
                 <HelpButton title="Impostazioni gestore e IVA">Qui imposti i parametri lato gestore: commissione JCP, commissioni Stripe e aliquota IVA. Questi valori influenzano la ripartizione economica ma non la scelta della modalità.</HelpButton>
@@ -273,10 +279,6 @@ function App() {
                 <label><span>IVA (%)</span><input type="number" value={form.iva} onChange={(e) => updateField('iva', Number(e.target.value))} /></label>
                 <label><span>Stripe %</span><input type="number" step="0.1" value={form.stripePerc} onChange={(e) => updateField('stripePerc', Number(e.target.value))} /></label>
                 <label><span>Stripe fisso per ricarica (€)</span><input type="number" step="0.01" value={form.stripeFisso} onChange={(e) => updateField('stripeFisso', Number(e.target.value))} /></label>
-              </div>
-              <div className="action-row action-row-split">
-                <button type="button" className="primary" onClick={() => persistEntry('simulation')}>Salva simulazione</button>
-                <button type="button" className="secondary" onClick={() => persistEntry('tariff')}>Salva come tariffa approvata</button>
               </div>
             </article>
           </section>
@@ -298,6 +300,10 @@ function App() {
               <div><span>Quota ammortamento coperta</span><strong>{formatCurrency(results.recuperoInfrastrutturaleDisponibile)}</strong></div>
               <div className={results.coperturaTarget >= 1 ? 'positive' : 'warning'}><span>Copertura quota ammortamento</span><strong>{formatNumber(results.coperturaTarget * 100, 1)}%</strong></div>
               <div><span>JCP netto reale</span><strong>{formatCurrency(results.nettoJCP)}</strong></div>
+            </div>
+            <div className="action-row action-row-split">
+              <button type="button" className="primary" onClick={() => persistEntry('simulation')}>Salva simulazione</button>
+              <button type="button" className="secondary" onClick={() => persistEntry('tariff')}>Salva come tariffa approvata</button>
             </div>
           </section>
 
@@ -350,7 +356,10 @@ function App() {
                 <li>Spese vive totali ente: {formatCurrency(entry.results.costoVivoTotale ?? 0)}</li>
                 <li>Saldo spese vive ente: {formatCurrency(entry.results.saldoSpeseVive ?? 0)}</li>
               </ul>
-              <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Riapri simulazione</button>
+              <div className="action-row archive-actions">
+                <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Riapri simulazione</button>
+                <a className="download-button" href={createSpreadsheetHref(entry.formSnapshot, entry.results)} download={`${entry.id}.csv`}>Scarica CSV</a>
+              </div>
             </article>
           ))}
         </section>
@@ -366,7 +375,10 @@ function App() {
                 <li>Quota ammortamento totale: {formatCurrency(entry.results.targetRecuperoTotale ?? 0)}</li>
                 <li>Copertura quota ammortamento: {formatNumber((entry.results.coperturaTarget ?? 0) * 100, 1)}%</li>
               </ul>
-              <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Applica tariffa al simulatore</button>
+              <div className="action-row archive-actions">
+                <button type="button" className="secondary" onClick={() => loadSnapshot(entry)}>Applica tariffa al simulatore</button>
+                <a className="download-button" href={createSpreadsheetHref(entry.formSnapshot, entry.results)} download={`${entry.id}.csv`}>Scarica CSV</a>
+              </div>
             </article>
           ))}
         </section>
