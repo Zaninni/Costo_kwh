@@ -8,7 +8,9 @@ import {
   formatCurrency,
   formatNumber,
   migrateDraft,
+  parseLocaleNumber,
   safeParse,
+  sanitizeDecimalInput,
   upsertEntryInState,
 } from './lib/calculations';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
@@ -46,11 +48,11 @@ const DEFAULT_ANALYSIS = {
   startMonth: '',
   endMonth: '',
   selectedTariffId: '',
-  consumedKwh: 0,
-  actualNetRevenuePerKwh: 0,
-  overrideEnergyCost: 0,
-  overrideAmortization: 0,
-  overrideSessions: 0,
+  consumedKwh: '',
+  actualNetRevenuePerKwh: '',
+  overrideEnergyCost: '',
+  overrideAmortization: '',
+  overrideSessions: '',
   notes: '',
 };
 
@@ -134,6 +136,11 @@ function createSpreadsheetHref(snapshotForm, snapshotResults) {
 
 function getTariffReferencePeriod(currentRef) {
   return (currentRef?.referencePeriod || window.prompt('Mese o trimestre di riferimento (es. 2026-03 o 2026-Q1)') || '').trim();
+}
+
+
+function DecimalInput({ value, onChange, ...props }) {
+  return <input {...props} type="text" inputMode="decimal" value={value} onChange={(e) => onChange(sanitizeDecimalInput(e.target.value))} />;
 }
 
 function App() {
@@ -247,11 +254,11 @@ function App() {
     if (!selectedTariff) return null;
 
     const baseForm = migrateDraft(selectedTariff.formSnapshot);
-    const consumedKwh = Number(analysisDraft.consumedKwh) || 0;
-    const actualNetRevenuePerKwh = Number(analysisDraft.actualNetRevenuePerKwh) || 0;
-    const overrideEnergyCost = Number(analysisDraft.overrideEnergyCost) || 0;
-    const overrideAmortization = Number(analysisDraft.overrideAmortization) || 0;
-    const overrideSessions = Number(analysisDraft.overrideSessions) || 0;
+    const consumedKwh = parseLocaleNumber(analysisDraft.consumedKwh);
+    const actualNetRevenuePerKwh = parseLocaleNumber(analysisDraft.actualNetRevenuePerKwh);
+    const overrideEnergyCost = parseLocaleNumber(analysisDraft.overrideEnergyCost);
+    const overrideAmortization = parseLocaleNumber(analysisDraft.overrideAmortization);
+    const overrideSessions = parseLocaleNumber(analysisDraft.overrideSessions);
 
     const actualForm = {
       ...baseForm,
@@ -572,7 +579,7 @@ function App() {
                 ))}
               </div>
               {form.calcMode === 'manual_gross' && (
-                <label><span>Prezzo lordo manuale (€/kWh)</span><input type="number" step="0.01" value={form.targetLordoManuale} onChange={(e) => updateField('targetLordoManuale', Number(e.target.value))} /></label>
+                <label><span>Prezzo lordo manuale (€/kWh)</span><DecimalInput value={form.targetLordoManuale} onChange={(value) => updateField('targetLordoManuale', value)} /></label>
               )}
             </article>
 
@@ -586,12 +593,12 @@ function App() {
                   <HelpButton id="help-costi" title="Costi ente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Inserisci qui i costi vivi per kWh, la quota ammortamento per kWh, i kWh totali simulati e il numero di ricariche usato per moltiplicare il costo fisso Stripe.</HelpButton>
                 </div>
                 <div className="field-grid">
-                  <label><span>Costo energia netto IVA (€/kWh)</span><input type="number" step="0.001" value={form.costoEnergia} onChange={(e) => updateField('costoEnergia', Number(e.target.value))} /></label>
-                  <label><span>Perdite rete (%)</span><input type="number" value={form.perditeRete} onChange={(e) => updateField('perditeRete', Number(e.target.value))} /></label>
-                  <label><span>Altri costi vivi unitari (€/kWh)</span><input type="number" step="0.001" value={form.altriCostiViviUnitari} onChange={(e) => updateField('altriCostiViviUnitari', Number(e.target.value))} /></label>
-                  <label><span>Quota ammortamento (€/kWh)</span><input type="number" step="0.001" value={form.quotaAmmortamento} onChange={(e) => updateField('quotaAmmortamento', Number(e.target.value))} /></label>
-                  <label><span>kWh del caso simulato</span><input type="number" value={form.kwh} onChange={(e) => updateField('kwh', Number(e.target.value))} /></label>
-                  <label><span>Numero di ricariche</span><input type="number" min="1" value={form.numeroRicariche} onChange={(e) => updateField('numeroRicariche', Number(e.target.value))} /></label>
+                  <label><span>Costo energia netto IVA (€/kWh)</span><DecimalInput value={form.costoEnergia} onChange={(value) => updateField('costoEnergia', value)} /></label>
+                  <label><span>Perdite rete (%)</span><DecimalInput value={form.perditeRete} onChange={(value) => updateField('perditeRete', value)} /></label>
+                  <label><span>Altri costi vivi unitari (€/kWh)</span><DecimalInput value={form.altriCostiViviUnitari} onChange={(value) => updateField('altriCostiViviUnitari', value)} /></label>
+                  <label><span>Quota ammortamento (€/kWh)</span><DecimalInput value={form.quotaAmmortamento} onChange={(value) => updateField('quotaAmmortamento', value)} /></label>
+                  <label><span>kWh del caso simulato</span><DecimalInput value={form.kwh} onChange={(value) => updateField('kwh', value)} /></label>
+                  <label><span>Numero di ricariche</span><DecimalInput value={form.numeroRicariche} onChange={(value) => updateField('numeroRicariche', value)} /></label>
                 </div>
               </article>
 
@@ -604,10 +611,10 @@ function App() {
                   <HelpButton id="help-gestore" title="Impostazioni gestore e IVA" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Qui imposti i parametri lato gestore: commissione JCP, commissioni Stripe e aliquota IVA. Questi valori influenzano la ripartizione economica ma non la scelta della modalità.</HelpButton>
                 </div>
                 <div className="field-grid">
-                  <label><span>Commissione JCP (%)</span><input type="number" value={form.percentualeJCP} onChange={(e) => updateField('percentualeJCP', Number(e.target.value))} /></label>
-                  <label><span>IVA (%)</span><input type="number" value={form.iva} onChange={(e) => updateField('iva', Number(e.target.value))} /></label>
-                  <label><span>Stripe %</span><input type="number" step="0.1" value={form.stripePerc} onChange={(e) => updateField('stripePerc', Number(e.target.value))} /></label>
-                  <label><span>Stripe fisso per ricarica (€)</span><input type="number" step="0.01" value={form.stripeFisso} onChange={(e) => updateField('stripeFisso', Number(e.target.value))} /></label>
+                  <label><span>Commissione JCP (%)</span><DecimalInput value={form.percentualeJCP} onChange={(value) => updateField('percentualeJCP', value)} /></label>
+                  <label><span>IVA (%)</span><DecimalInput value={form.iva} onChange={(value) => updateField('iva', value)} /></label>
+                  <label><span>Stripe %</span><DecimalInput value={form.stripePerc} onChange={(value) => updateField('stripePerc', value)} /></label>
+                  <label><span>Stripe fisso per ricarica (€)</span><DecimalInput value={form.stripeFisso} onChange={(value) => updateField('stripeFisso', value)} /></label>
                 </div>
               </article>
             </section>
@@ -852,11 +859,11 @@ function App() {
               <label><span>Mese iniziale</span><input type="month" value={analysisDraft.startMonth} onChange={(e) => setAnalysisDraft((current) => ({ ...current, startMonth: e.target.value }))} /></label>
               <label><span>Mese finale</span><input type="month" value={analysisDraft.endMonth} onChange={(e) => setAnalysisDraft((current) => ({ ...current, endMonth: e.target.value }))} /></label>
               <label><span>Tariffa applicata</span><select value={analysisDraft.selectedTariffId} onChange={(e) => setAnalysisDraft((current) => ({ ...current, selectedTariffId: e.target.value }))}>{tariffOptions.map((item) => <option key={item.id} value={item.id}>{item.referencePeriod} · {item.id} · {item.source}</option>)}</select></label>
-              <label><span>kWh realmente erogati</span><input type="number" value={analysisDraft.consumedKwh} onChange={(e) => setAnalysisDraft((current) => ({ ...current, consumedKwh: Number(e.target.value) }))} /></label>
-              <label><span>Netto ente effettivo (€/kWh)</span><input type="number" step="0.001" value={analysisDraft.actualNetRevenuePerKwh} onChange={(e) => setAnalysisDraft((current) => ({ ...current, actualNetRevenuePerKwh: Number(e.target.value) }))} /></label>
-              <label><span>Costo energia aggiornato (€/kWh)</span><input type="number" step="0.001" value={analysisDraft.overrideEnergyCost} onChange={(e) => setAnalysisDraft((current) => ({ ...current, overrideEnergyCost: Number(e.target.value) }))} /></label>
-              <label><span>Quota ammortamento aggiornata (€/kWh)</span><input type="number" step="0.001" value={analysisDraft.overrideAmortization} onChange={(e) => setAnalysisDraft((current) => ({ ...current, overrideAmortization: Number(e.target.value) }))} /></label>
-              <label><span>Numero ricariche reale</span><input type="number" min="1" value={analysisDraft.overrideSessions} onChange={(e) => setAnalysisDraft((current) => ({ ...current, overrideSessions: Number(e.target.value) }))} /></label>
+              <label><span>kWh realmente erogati</span><DecimalInput value={analysisDraft.consumedKwh} onChange={(value) => setAnalysisDraft((current) => ({ ...current, consumedKwh: value }))} /></label>
+              <label><span>Netto ente effettivo (€/kWh)</span><DecimalInput value={analysisDraft.actualNetRevenuePerKwh} onChange={(value) => setAnalysisDraft((current) => ({ ...current, actualNetRevenuePerKwh: value }))} /></label>
+              <label><span>Costo energia aggiornato (€/kWh)</span><DecimalInput value={analysisDraft.overrideEnergyCost} onChange={(value) => setAnalysisDraft((current) => ({ ...current, overrideEnergyCost: value }))} /></label>
+              <label><span>Quota ammortamento aggiornata (€/kWh)</span><DecimalInput value={analysisDraft.overrideAmortization} onChange={(value) => setAnalysisDraft((current) => ({ ...current, overrideAmortization: value }))} /></label>
+              <label><span>Numero ricariche reale</span><DecimalInput value={analysisDraft.overrideSessions} onChange={(value) => setAnalysisDraft((current) => ({ ...current, overrideSessions: value }))} /></label>
             </div>
             <label><span>Note</span><textarea rows="4" value={analysisDraft.notes} onChange={(e) => setAnalysisDraft((current) => ({ ...current, notes: e.target.value }))} /></label>
           </article>

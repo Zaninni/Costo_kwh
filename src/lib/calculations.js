@@ -1,15 +1,15 @@
 export const DEFAULT_FORM = {
-  costoEnergia: 0.22,
-  perditeRete: 5,
-  altriCostiViviUnitari: 0,
-  quotaAmmortamento: 0.04,
-  numeroRicariche: 1,
-  percentualeJCP: 6,
-  stripePerc: 3,
-  stripeFisso: 0.3,
-  iva: 22,
-  kwh: 30,
-  targetLordoManuale: 0.35,
+  costoEnergia: '0,22',
+  perditeRete: '5',
+  altriCostiViviUnitari: '0',
+  quotaAmmortamento: '0,04',
+  numeroRicariche: '1',
+  percentualeJCP: '6',
+  stripePerc: '3',
+  stripeFisso: '0,30',
+  iva: '22',
+  kwh: '30',
+  targetLordoManuale: '0,35',
   calcMode: 'live_plus_amortization',
 };
 
@@ -29,6 +29,27 @@ export const formatNumber = (value, digits = 3) =>
     Number.isFinite(value) ? value : 0,
   );
 
+
+export function sanitizeDecimalInput(value) {
+  const normalized = String(value ?? '').replace(/\./g, ',').replace(/[^0-9,]/g, '');
+  const parts = normalized.split(',');
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]},${parts.slice(1).join('').slice(0, 2)}`;
+}
+
+export function parseLocaleNumber(value) {
+  if (value === '' || value === null || value === undefined) return 0;
+  const normalized = typeof value === 'number' ? String(value) : String(value).replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toEditableNumber(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  if (typeof value === 'string') return sanitizeDecimalInput(value);
+  return String(value).replace('.', ',');
+}
+
 export function safeParse(value, fallback) {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -38,7 +59,7 @@ export function safeParse(value, fallback) {
 }
 
 function clampNonNegative(value) {
-  return Math.max(Number(value) || 0, 0);
+  return Math.max(parseLocaleNumber(value), 0);
 }
 
 export function migrateDraft(raw) {
@@ -51,8 +72,17 @@ export function migrateDraft(raw) {
 
   return {
     ...merged,
-    quotaAmmortamento: clampNonNegative(legacyAmortization),
-    numeroRicariche: Math.max(1, Math.round(clampNonNegative(raw?.numeroRicariche ?? 1))),
+    costoEnergia: toEditableNumber(merged.costoEnergia),
+    perditeRete: toEditableNumber(merged.perditeRete),
+    altriCostiViviUnitari: toEditableNumber(merged.altriCostiViviUnitari),
+    quotaAmmortamento: toEditableNumber(legacyAmortization),
+    numeroRicariche: toEditableNumber(raw?.numeroRicariche ?? merged.numeroRicariche ?? 1),
+    percentualeJCP: toEditableNumber(merged.percentualeJCP),
+    stripePerc: toEditableNumber(merged.stripePerc),
+    stripeFisso: toEditableNumber(merged.stripeFisso),
+    iva: toEditableNumber(merged.iva),
+    kwh: toEditableNumber(merged.kwh),
+    targetLordoManuale: toEditableNumber(merged.targetLordoManuale),
     calcMode:
       raw?.calcMode === 'live_plus_infra'
         ? 'live_plus_amortization'

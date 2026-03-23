@@ -170,3 +170,10 @@ th { color:#6b7280; font-size:.78rem; text-transform:uppercase; letter-spacing:.
 .result-group-head h3 { margin: 0; color: #111827; font-size: 1rem; }
 .result-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .result-metrics.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 720px) {
+  .results-card .card-title-row, .result-group-head, .results-card .title-actions { flex-direction: column; align-items: stretch; }
+  .results-card .status-pill { justify-content: center; }
+  .metric-highlight strong { font-size: clamp(1.6rem, 10vw, 2.2rem); }
+  .result-group .metric-highlight small { margin-top: 6px; }
+}
