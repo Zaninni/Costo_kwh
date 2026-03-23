@@ -554,16 +554,19 @@ function App() {
 
       {activePanel === 'dashboard' && (
         <>
-          <section className="grid-layout dashboard-grid">
+          <section className="stacked-panels dashboard-flow">
             <article className="card">
               <div className="card-title-row">
-                <h2>Modalità di calcolo prezzo</h2>
+                <div>
+                  <h2>1 · Scelta metodo</h2>
+                  <p className="section-copy">Scegli come vuoi costruire il prezzo finale prima di compilare i dati economici.</p>
+                </div>
                 <HelpButton id="help-modalita" title="Modalità di calcolo" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Scegli se vuoi coprire solo le spese vive, includere anche la quota ammortamento oppure verificare un prezzo lordo già deciso.</HelpButton>
               </div>
               <div className="mode-stack">
                 {MODE_OPTIONS.map((mode) => (
                   <button key={mode.id} type="button" className={`mode-button ${form.calcMode === mode.id ? 'active' : ''}`} onClick={() => updateField('calcMode', mode.id)}>
-                    <strong>{mode.label}</strong>
+                    <strong>{mode.label.replace(/^\d+\s*·\s*/, '')}</strong>
                     <span>{mode.description}</span>
                   </button>
                 ))}
@@ -573,58 +576,105 @@ function App() {
               )}
             </article>
 
-            <article className="card">
-              <div className="card-title-row">
-                <h2>Costi ente</h2>
-                <HelpButton id="help-costi" title="Costi ente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Inserisci qui i costi vivi per kWh, la quota ammortamento per kWh, i kWh totali simulati e il numero di ricariche usato per moltiplicare il costo fisso Stripe.</HelpButton>
-              </div>
-              <div className="field-grid">
-                <label><span>Costo energia netto IVA (€/kWh)</span><input type="number" step="0.001" value={form.costoEnergia} onChange={(e) => updateField('costoEnergia', Number(e.target.value))} /></label>
-                <label><span>Perdite rete (%)</span><input type="number" value={form.perditeRete} onChange={(e) => updateField('perditeRete', Number(e.target.value))} /></label>
-                <label><span>Altri costi vivi unitari (€/kWh)</span><input type="number" step="0.001" value={form.altriCostiViviUnitari} onChange={(e) => updateField('altriCostiViviUnitari', Number(e.target.value))} /></label>
-                <label><span>Quota ammortamento (€/kWh)</span><input type="number" step="0.001" value={form.quotaAmmortamento} onChange={(e) => updateField('quotaAmmortamento', Number(e.target.value))} /></label>
-                <label><span>kWh del caso simulato</span><input type="number" value={form.kwh} onChange={(e) => updateField('kwh', Number(e.target.value))} /></label>
-                <label><span>Numero di ricariche</span><input type="number" min="1" value={form.numeroRicariche} onChange={(e) => updateField('numeroRicariche', Number(e.target.value))} /></label>
-              </div>
-              <div className="mini-metrics three-col">
-                <div><span>Costo vivo unitario</span><strong>{formatCurrency(results.costoVivoUnitario)}/kWh</strong></div>
-                <div><span>Costo vivo totale</span><strong>{formatCurrency(results.costoVivoTotale)}</strong></div>
-                <div><span>Quota ammortamento totale</span><strong>{formatCurrency(results.targetRecuperoTotale)}</strong></div>
-              </div>
-            </article>
+            <section className="grid-layout dashboard-grid">
+              <article className="card">
+                <div className="card-title-row">
+                  <div>
+                    <h2>2 · Dati ente</h2>
+                    <p className="section-copy">Compila prima i costi e i volumi del caso simulato.</p>
+                  </div>
+                  <HelpButton id="help-costi" title="Costi ente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Inserisci qui i costi vivi per kWh, la quota ammortamento per kWh, i kWh totali simulati e il numero di ricariche usato per moltiplicare il costo fisso Stripe.</HelpButton>
+                </div>
+                <div className="field-grid">
+                  <label><span>Costo energia netto IVA (€/kWh)</span><input type="number" step="0.001" value={form.costoEnergia} onChange={(e) => updateField('costoEnergia', Number(e.target.value))} /></label>
+                  <label><span>Perdite rete (%)</span><input type="number" value={form.perditeRete} onChange={(e) => updateField('perditeRete', Number(e.target.value))} /></label>
+                  <label><span>Altri costi vivi unitari (€/kWh)</span><input type="number" step="0.001" value={form.altriCostiViviUnitari} onChange={(e) => updateField('altriCostiViviUnitari', Number(e.target.value))} /></label>
+                  <label><span>Quota ammortamento (€/kWh)</span><input type="number" step="0.001" value={form.quotaAmmortamento} onChange={(e) => updateField('quotaAmmortamento', Number(e.target.value))} /></label>
+                  <label><span>kWh del caso simulato</span><input type="number" value={form.kwh} onChange={(e) => updateField('kwh', Number(e.target.value))} /></label>
+                  <label><span>Numero di ricariche</span><input type="number" min="1" value={form.numeroRicariche} onChange={(e) => updateField('numeroRicariche', Number(e.target.value))} /></label>
+                </div>
+              </article>
 
-            <article className="card span-two">
-              <div className="card-title-row">
-                <h2>Impostazioni gestore e IVA</h2>
-                <HelpButton id="help-gestore" title="Impostazioni gestore e IVA" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Qui imposti i parametri lato gestore: commissione JCP, commissioni Stripe e aliquota IVA. Questi valori influenzano la ripartizione economica ma non la scelta della modalità.</HelpButton>
-              </div>
-              <div className="field-grid">
-                <label><span>Commissione JCP (%)</span><input type="number" value={form.percentualeJCP} onChange={(e) => updateField('percentualeJCP', Number(e.target.value))} /></label>
-                <label><span>IVA (%)</span><input type="number" value={form.iva} onChange={(e) => updateField('iva', Number(e.target.value))} /></label>
-                <label><span>Stripe %</span><input type="number" step="0.1" value={form.stripePerc} onChange={(e) => updateField('stripePerc', Number(e.target.value))} /></label>
-                <label><span>Stripe fisso per ricarica (€)</span><input type="number" step="0.01" value={form.stripeFisso} onChange={(e) => updateField('stripeFisso', Number(e.target.value))} /></label>
-              </div>
-            </article>
+              <article className="card">
+                <div className="card-title-row">
+                  <div>
+                    <h2>3 · Dati JCP, Stripe e IVA</h2>
+                    <p className="section-copy">Questi parametri influenzano la ripartizione del margine e il prezzo finale.</p>
+                  </div>
+                  <HelpButton id="help-gestore" title="Impostazioni gestore e IVA" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Qui imposti i parametri lato gestore: commissione JCP, commissioni Stripe e aliquota IVA. Questi valori influenzano la ripartizione economica ma non la scelta della modalità.</HelpButton>
+                </div>
+                <div className="field-grid">
+                  <label><span>Commissione JCP (%)</span><input type="number" value={form.percentualeJCP} onChange={(e) => updateField('percentualeJCP', Number(e.target.value))} /></label>
+                  <label><span>IVA (%)</span><input type="number" value={form.iva} onChange={(e) => updateField('iva', Number(e.target.value))} /></label>
+                  <label><span>Stripe %</span><input type="number" step="0.1" value={form.stripePerc} onChange={(e) => updateField('stripePerc', Number(e.target.value))} /></label>
+                  <label><span>Stripe fisso per ricarica (€)</span><input type="number" step="0.01" value={form.stripeFisso} onChange={(e) => updateField('stripeFisso', Number(e.target.value))} /></label>
+                </div>
+              </article>
+            </section>
           </section>
 
           <section className="card results-card second-row">
             <div className="card-title-row">
-              <h2>Metriche economiche</h2>
+              <div>
+                <h2>4 · Risultati simulazione</h2>
+                <p className="section-copy">I risultati sono raggruppati per appartenenza: cliente, ente e gestore.</p>
+              </div>
               <div className="title-actions">
                 <span className={`status-pill ${results.health}`}>{healthDescriptions[results.health]}</span>
                 <HelpButton id="help-metriche" title="Metriche economiche" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Le spese vive dicono se l’ente perde davvero. La quota ammortamento totale è l’obiettivo infrastrutturale del caso simulato. La quota ammortamento coperta è solo la parte che resta dopo avere coperto tutte le spese vive.</HelpButton>
               </div>
             </div>
-            <div className="metric-grid">
-              <div className="metric-highlight"><span>Prezzo finale cliente</span><strong>{formatCurrency(results.lordoCliente)}</strong><small>{formatCurrency(results.prezzoUnitarioLordo)}/kWh</small></div>
-              <div><span>Netto ente</span><strong>{formatCurrency(results.nettoEnte)}</strong></div>
-              <div><span>Spese vive totali ente</span><strong>{formatCurrency(results.costoVivoTotale)}</strong></div>
-              <div><span>Quota ammortamento totale</span><strong>{formatCurrency(results.targetRecuperoTotale)}</strong></div>
-              <div className={results.saldoSpeseVive < 0 ? 'negative' : 'positive'}><span>Saldo spese vive ente</span><strong>{formatCurrency(results.saldoSpeseVive)}</strong></div>
-              <div><span>Quota ammortamento coperta</span><strong>{formatCurrency(results.recuperoInfrastrutturaleDisponibile)}</strong></div>
-              <div className={results.coperturaTarget >= 1 ? 'positive' : 'warning'}><span>Copertura quota ammortamento</span><strong>{formatNumber(results.coperturaTarget * 100, 1)}%</strong></div>
-              <div><span>JCP netto reale</span><strong>{formatCurrency(results.nettoJCP)}</strong></div>
+
+            <div className="result-groups">
+              <article className="result-group">
+                <div className="result-group-head">
+                  <h3>Cliente</h3>
+                  <span className="status-pill">Prezzo finale</span>
+                </div>
+                <div className="metric-grid result-metrics two-col">
+                  <div className="metric-highlight">
+                    <span>Prezzo finale cliente</span>
+                    <strong>{formatCurrency(results.lordoCliente)}</strong>
+                    <small>{formatCurrency(results.prezzoUnitarioLordo)}/kWh</small>
+                  </div>
+                  <div>
+                    <span>Imponibile totale</span>
+                    <strong>{formatCurrency(results.imponibileTotale)}</strong>
+                  </div>
+                </div>
+              </article>
+
+              <article className="result-group">
+                <div className="result-group-head">
+                  <h3>Ente</h3>
+                  <span className={`status-pill ${results.health}`}>Sintesi ente</span>
+                </div>
+                <div className="metric-grid result-metrics">
+                  <div><span>Costo vivo unitario</span><strong>{formatCurrency(results.costoVivoUnitario)}/kWh</strong></div>
+                  <div><span>Spese vive totali ente</span><strong>{formatCurrency(results.costoVivoTotale)}</strong></div>
+                  <div><span>Netto ente</span><strong>{formatCurrency(results.nettoEnte)}</strong></div>
+                  <div><span>Quota ammortamento totale</span><strong>{formatCurrency(results.targetRecuperoTotale)}</strong></div>
+                  <div className={results.saldoSpeseVive < 0 ? 'negative' : 'positive'}><span>Saldo spese vive ente</span><strong>{formatCurrency(results.saldoSpeseVive)}</strong></div>
+                  <div><span>Quota ammortamento coperta</span><strong>{formatCurrency(results.recuperoInfrastrutturaleDisponibile)}</strong></div>
+                  <div className={results.coperturaTarget >= 1 ? 'positive' : 'warning'}><span>Copertura quota ammortamento</span><strong>{formatNumber(results.coperturaTarget * 100, 1)}%</strong></div>
+                  <div><span>Numero ricariche</span><strong>{form.numeroRicariche}</strong></div>
+                </div>
+              </article>
+
+              <article className="result-group">
+                <div className="result-group-head">
+                  <h3>Gestore / JCP</h3>
+                  <span className="status-pill">Ripartizione</span>
+                </div>
+                <div className="metric-grid result-metrics two-col">
+                  <div><span>Lordo JCP</span><strong>{formatCurrency(results.lordoJCP)}</strong></div>
+                  <div><span>Costo Stripe totale</span><strong>{formatCurrency(results.stripeCost)}</strong></div>
+                  <div><span>Stripe fisso totale</span><strong>{formatCurrency(results.stripeFixedTotal)}</strong></div>
+                  <div><span>JCP netto reale</span><strong>{formatCurrency(results.nettoJCP)}</strong></div>
+                </div>
+              </article>
             </div>
+
             {!isOwnerAuthenticated ? <p className="inline-note">Per i salvataggi cloud è necessario il login proprietario.</p> : null}
             <div className="action-row action-row-split owner-save-actions dashboard-save-grid">
               <button type="button" className="primary" onClick={saveLocalSimulation}>Salva simulazione nel browser</button>
