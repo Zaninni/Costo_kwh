@@ -1,15 +1,15 @@
 export const DEFAULT_FORM = {
-  costoEnergia: 0.22,
-  perditeRete: 5,
-  altriCostiViviUnitari: 0,
-  quotaAmmortamento: 0.04,
-  numeroRicariche: 1,
-  percentualeJCP: 6,
-  stripePerc: 3,
-  stripeFisso: 0.3,
-  iva: 22,
-  kwh: 30,
-  targetLordoManuale: 0.35,
+  costoEnergia: '0,22',
+  perditeRete: '5',
+  altriCostiViviUnitari: '0',
+  quotaAmmortamento: '0,04',
+  numeroRicariche: '1',
+  percentualeJCP: '6',
+  stripePerc: '3',
+  stripeFisso: '0,30',
+  iva: '22',
+  kwh: '30',
+  targetLordoManuale: '0,35',
   calcMode: 'live_plus_amortization',
 };
 
@@ -22,12 +22,45 @@ export const MODE_OPTIONS = [
 export const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const formatCurrency = (value) =>
-  new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number.isFinite(value) ? value : 0);
+  new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(parseLocaleNumber(value));
 
-export const formatNumber = (value, digits = 3) =>
+export const formatNumber = (value, digits = 2) =>
   new Intl.NumberFormat('it-IT', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
-    Number.isFinite(value) ? value : 0,
+    parseLocaleNumber(value),
   );
+
+export function formatCurrencyParts(value) {
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' })
+    .formatToParts(parseLocaleNumber(value))
+    .reduce(
+      (parts, part) => {
+        if (part.type === 'currency') parts.currency += part.value;
+        else parts.amount += part.value;
+        return parts;
+      },
+      { amount: '', currency: '' },
+    );
+}
+
+export function sanitizeDecimalInput(value) {
+  const normalized = String(value ?? '').replace(/\./g, ',').replace(/[^0-9,]/g, '');
+  const parts = normalized.split(',');
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]},${parts.slice(1).join('').slice(0, 4)}`;
+}
+
+export function parseLocaleNumber(value) {
+  if (value === '' || value === null || value === undefined) return 0;
+  const normalized = typeof value === 'number' ? String(value) : String(value).replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toEditableNumber(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  if (typeof value === 'string') return sanitizeDecimalInput(value);
+  return String(value).replace('.', ',');
+}
 
 export function safeParse(value, fallback) {
   try {
@@ -38,7 +71,11 @@ export function safeParse(value, fallback) {
 }
 
 function clampNonNegative(value) {
-  return Math.max(Number(value) || 0, 0);
+  return Math.max(parseLocaleNumber(value), 0);
+}
+
+function clampPercentage(value) {
+  return Math.min(Math.max(parseLocaleNumber(value), 0), 100);
 }
 
 export function migrateDraft(raw) {
@@ -51,8 +88,17 @@ export function migrateDraft(raw) {
 
   return {
     ...merged,
-    quotaAmmortamento: clampNonNegative(legacyAmortization),
-    numeroRicariche: Math.max(1, Math.round(clampNonNegative(raw?.numeroRicariche ?? 1))),
+    costoEnergia: toEditableNumber(merged.costoEnergia),
+    perditeRete: toEditableNumber(merged.perditeRete),
+    altriCostiViviUnitari: toEditableNumber(merged.altriCostiViviUnitari),
+    quotaAmmortamento: toEditableNumber(legacyAmortization),
+    numeroRicariche: toEditableNumber(raw?.numeroRicariche ?? merged.numeroRicariche ?? 1),
+    percentualeJCP: toEditableNumber(merged.percentualeJCP),
+    stripePerc: toEditableNumber(merged.stripePerc),
+    stripeFisso: toEditableNumber(merged.stripeFisso),
+    iva: toEditableNumber(merged.iva),
+    kwh: toEditableNumber(merged.kwh),
+    targetLordoManuale: toEditableNumber(merged.targetLordoManuale),
     calcMode:
       raw?.calcMode === 'live_plus_infra'
         ? 'live_plus_amortization'
@@ -134,14 +180,15 @@ export function upsertEntryInState(entries, nextEntry) {
 }
 
 export function calculateResults(form) {
-  const kwh = Math.max(clampNonNegative(form.kwh), 0.0001);
+  const kwh = clampNonNegative(form.kwh);
+  const safeKwh = Math.max(kwh, 0.0001);
   const costoEnergia = clampNonNegative(form.costoEnergia);
-  const perditeRete = clampNonNegative(form.perditeRete);
+  const perditeRete = clampPercentage(form.perditeRete);
   const altriCostiViviUnitari = clampNonNegative(form.altriCostiViviUnitari);
   const quotaAmmortamento = clampNonNegative(form.quotaAmmortamento);
-  const numeroRicariche = Math.max(1, Math.round(clampNonNegative(form.numeroRicariche)));
-  const percentualeJCP = clampNonNegative(form.percentualeJCP);
-  const stripePerc = clampNonNegative(form.stripePerc);
+  const numeroRicariche = Math.round(clampNonNegative(form.numeroRicariche));
+  const percentualeJCP = clampPercentage(form.percentualeJCP);
+  const stripePerc = clampPercentage(form.stripePerc);
   const stripeFisso = clampNonNegative(form.stripeFisso);
   const iva = clampNonNegative(form.iva);
 
@@ -181,6 +228,7 @@ export function calculateResults(form) {
   else if (coperturaTarget < 1) health = 'yellow';
 
   return {
+    consumedKwh: kwh,
     costoVivoUnitario,
     costoVivoTotale,
     quotaAmmortamento,
@@ -197,8 +245,8 @@ export function calculateResults(form) {
     saldoSpeseVive,
     recuperoInfrastrutturaleDisponibile,
     coperturaTarget,
-    prezzoUnitarioLordo: lordoCliente / kwh,
-    prezzoUnitarioNettoEnte: nettoEnte / kwh,
+    prezzoUnitarioLordo: lordoCliente / safeKwh,
+    prezzoUnitarioNettoEnte: nettoEnte / safeKwh,
     health,
   };
 }
