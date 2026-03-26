@@ -122,40 +122,46 @@ function HelpButton({ id, title, children, activeHelpId, setActiveHelpId }) {
 }
 
 function buildSpreadsheetCsv(form, results) {
-  const quotaEnte = 1 - parseLocaleNumber(form.percentualeJCP) / 100;
-  const ivaFactor = 1 + parseLocaleNumber(form.iva) / 100;
   const rows = [
     ['Voce', 'Valore', 'Formula Excel / Nota'],
-    ['Costo energia €/kWh', form.costoEnergia, 'input'],
-    ['Perdite rete %', form.perditeRete, 'input'],
-    ['Altri costi vivi €/kWh', form.altriCostiViviUnitari, 'input'],
-    ['Quota ammortamento €/kWh', form.quotaAmmortamento, 'input'],
-    ['Numero ricariche', form.numeroRicariche, 'input'],
-    ['kWh simulati', form.kwh, 'input'],
-    ['Commissione JCP %', form.percentualeJCP, 'input'],
-    ['Stripe %', form.stripePerc, 'input'],
-    ['Stripe fisso € per ricarica', form.stripeFisso, 'input'],
-    ['IVA %', form.iva, 'input'],
-    ['Costo vivo unitario', results.costoVivoUnitario, '=CostoEnergia*(1+PerditeRete/100)+AltriCostiVivi'],
-    ['Costo vivo totale', results.costoVivoTotale, '=CostoVivoUnitario*kWh'],
-    ['Quota ammortamento totale', results.targetRecuperoTotale, '=QuotaAmmortamento*kWh'],
-    ['Netto ente target', '', '=CostoVivoTotale oppure CostoVivoTotale+QuotaAmmortamentoTotale in base alla modalità'],
-    ['Quota ente su imponibile', quotaEnte, '=1-JCP%'],
-    ['Imponibile totale', results.imponibileTotale, '=NettoEnteTarget/QuotaEnte oppure =(PrezzoLordoManuale*kWh)/(1+IVA)'],
-    ['Lordo cliente', results.lordoCliente, '=ImponibileTotale*(1+IVA)'],
-    ['Netto ente', results.nettoEnte, '=ImponibileTotale*QuotaEnte'],
-    ['Lordo JCP', results.lordoJCP, '=ImponibileTotale*JCP%'],
-    ['Stripe fisso totale', results.stripeFixedTotal, '=NumeroRicariche*StripeFisso'],
-    ['Costo Stripe totale', results.stripeCost, '=ImponibileTotale*Stripe%+StripeFissoTotale'],
-    ['Netto JCP', results.nettoJCP, '=LordoJCP-CostoStripeTotale'],
-    ['Saldo spese vive ente', results.saldoSpeseVive, '=NettoEnte-CostoVivoTotale'],
-    ['Quota ammortamento coperta', results.recuperoInfrastrutturaleDisponibile, '=MAX(0;NettoEnte-CostoVivoTotale)'],
-    ['Copertura quota ammortamento', results.coperturaTarget, '=QuotaAmmortamentoCoperta/QuotaAmmortamentoTotale'],
-    ['Note', '', `Modalità attiva: ${MODE_OPTIONS.find((mode) => mode.id === form.calcMode)?.label || form.calcMode}; IVA factor ${ivaFactor}`],
+    ['Costo energia €/kWh', parseLocaleNumber(form.costoEnergia), 'input'],
+    ['Perdite rete %', parseLocaleNumber(form.perditeRete), 'input'],
+    ['Altri costi vivi €/kWh', parseLocaleNumber(form.altriCostiViviUnitari), 'input'],
+    ['Quota ammortamento €/kWh', parseLocaleNumber(form.quotaAmmortamento), 'input'],
+    ['Numero ricariche', parseLocaleNumber(form.numeroRicariche), 'input'],
+    ['kWh simulati', parseLocaleNumber(form.kwh), 'input'],
+    ['Commissione JCP %', parseLocaleNumber(form.percentualeJCP), 'input'],
+    ['Stripe %', parseLocaleNumber(form.stripePerc), 'input'],
+    ['Stripe fisso € per ricarica', parseLocaleNumber(form.stripeFisso), 'input'],
+    ['IVA %', parseLocaleNumber(form.iva), 'input'],
+    ['Modalità calcolo', form.calcMode, 'live_only | live_plus_amortization | manual_gross'],
+    ['Prezzo lordo manuale €/kWh', parseLocaleNumber(form.targetLordoManuale), 'usato solo se modalità manual_gross'],
+    ['Costo vivo unitario', results.costoVivoUnitario, '=B2*(1+B3/100)+B4'],
+    ['Costo vivo totale', results.costoVivoTotale, '=B14*B7'],
+    ['Quota ammortamento totale', results.targetRecuperoTotale, '=B5*B7'],
+    ['Netto ente target', '', '=IF(B12="live_only";B15;IF(B12="live_plus_amortization";B15+B16;0))'],
+    ['Quota ente su imponibile', 1 - parseLocaleNumber(form.percentualeJCP) / 100, '=1-B8/100'],
+    ['Imponibile totale', results.imponibileTotale, '=IF(B12="manual_gross";(B13*B7)/(1+B11/100);IF(B18>0;B17/B18;0))'],
+    ['Lordo cliente', results.lordoCliente, '=B19*(1+B11/100)'],
+    ['Netto ente', results.nettoEnte, '=B19*B18'],
+    ['Lordo JCP', results.lordoJCP, '=B19*(B8/100)'],
+    ['Stripe fisso totale', results.stripeFixedTotal, '=B6*B10'],
+    ['Costo Stripe totale', results.stripeCost, '=B19*(B9/100)+B23'],
+    ['Netto JCP', results.nettoJCP, '=B22-B24'],
+    ['Saldo spese vive ente', results.saldoSpeseVive, '=B21-B15'],
+    ['Quota ammortamento coperta', results.recuperoInfrastrutturaleDisponibile, '=MAX(0;B26)'],
+    ['Copertura quota ammortamento', results.coperturaTarget, '=IF(B16>0;B27/B16;1)'],
   ];
 
+  const toCsvCell = (cell) => {
+    if (cell === null || cell === undefined) return '';
+    const value = String(cell);
+    if (/[;"\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+    return value;
+  };
+
   return rows
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(';'))
+    .map((row) => row.map((cell) => toCsvCell(cell)).join(';'))
     .join('\n');
 }
 
