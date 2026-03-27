@@ -64,9 +64,9 @@ const healthDescriptions = {
 };
 
 const healthLabels = {
-  red: 'Stato rosso',
-  yellow: 'Stato giallo',
-  green: 'Stato verde',
+  red: 'Perdita spese vive',
+  yellow: 'Ammortamento parziale',
+  green: 'Copertura completa',
 };
 
 function HelpButton({ id, title, children, activeHelpId, setActiveHelpId }) {
@@ -101,12 +101,12 @@ function HelpButton({ id, title, children, activeHelpId, setActiveHelpId }) {
         aria-expanded={isOpen}
         onClick={() => setActiveHelpId(isOpen ? null : id)}
       >
-        ?
+        {isOpen ? '×' : '?'}
       </button>
       {isOpen ? (
         <>
           <div className="help-backdrop" aria-hidden="true" />
-          <div ref={panelRef} className="help-panel" role="dialog" aria-modal="true" aria-label={title}>
+          <div ref={panelRef} className="help-panel" role="dialog" aria-label={title}>
             <div className="help-panel-head">
               <strong>{title}</strong>
               <button type="button" className="help-close" aria-label="Chiudi aiuto" onClick={() => setActiveHelpId(null)}>
@@ -122,40 +122,50 @@ function HelpButton({ id, title, children, activeHelpId, setActiveHelpId }) {
 }
 
 function buildSpreadsheetCsv(form, results) {
-  const quotaEnte = 1 - parseLocaleNumber(form.percentualeJCP) / 100;
-  const ivaFactor = 1 + parseLocaleNumber(form.iva) / 100;
   const rows = [
     ['Voce', 'Valore', 'Formula Excel / Nota'],
-    ['Costo energia €/kWh', form.costoEnergia, 'input'],
-    ['Perdite rete %', form.perditeRete, 'input'],
-    ['Altri costi vivi €/kWh', form.altriCostiViviUnitari, 'input'],
-    ['Quota ammortamento €/kWh', form.quotaAmmortamento, 'input'],
-    ['Numero ricariche', form.numeroRicariche, 'input'],
-    ['kWh simulati', form.kwh, 'input'],
-    ['Commissione JCP %', form.percentualeJCP, 'input'],
-    ['Stripe %', form.stripePerc, 'input'],
-    ['Stripe fisso € per ricarica', form.stripeFisso, 'input'],
-    ['IVA %', form.iva, 'input'],
-    ['Costo vivo unitario', results.costoVivoUnitario, '=CostoEnergia*(1+PerditeRete/100)+AltriCostiVivi'],
-    ['Costo vivo totale', results.costoVivoTotale, '=CostoVivoUnitario*kWh'],
-    ['Quota ammortamento totale', results.targetRecuperoTotale, '=QuotaAmmortamento*kWh'],
-    ['Netto ente target', '', '=CostoVivoTotale oppure CostoVivoTotale+QuotaAmmortamentoTotale in base alla modalità'],
-    ['Quota ente su imponibile', quotaEnte, '=1-JCP%'],
-    ['Imponibile totale', results.imponibileTotale, '=NettoEnteTarget/QuotaEnte oppure =(PrezzoLordoManuale*kWh)/(1+IVA)'],
-    ['Lordo cliente', results.lordoCliente, '=ImponibileTotale*(1+IVA)'],
-    ['Netto ente', results.nettoEnte, '=ImponibileTotale*QuotaEnte'],
-    ['Lordo JCP', results.lordoJCP, '=ImponibileTotale*JCP%'],
-    ['Stripe fisso totale', results.stripeFixedTotal, '=NumeroRicariche*StripeFisso'],
-    ['Costo Stripe totale', results.stripeCost, '=ImponibileTotale*Stripe%+StripeFissoTotale'],
-    ['Netto JCP', results.nettoJCP, '=LordoJCP-CostoStripeTotale'],
-    ['Saldo spese vive ente', results.saldoSpeseVive, '=NettoEnte-CostoVivoTotale'],
-    ['Quota ammortamento coperta', results.recuperoInfrastrutturaleDisponibile, '=MAX(0;NettoEnte-CostoVivoTotale)'],
-    ['Copertura quota ammortamento', results.coperturaTarget, '=QuotaAmmortamentoCoperta/QuotaAmmortamentoTotale'],
-    ['Note', '', `Modalità attiva: ${MODE_OPTIONS.find((mode) => mode.id === form.calcMode)?.label || form.calcMode}; IVA factor ${ivaFactor}`],
+    ['Costo energia lordo IVA €/kWh', parseLocaleNumber(form.costoEnergia), 'input (IVA inclusa)'],
+    ['Perdite rete %', parseLocaleNumber(form.perditeRete), 'input'],
+    ['Altri costi vivi €/kWh', parseLocaleNumber(form.altriCostiViviUnitari), 'input'],
+    ['Quota ammortamento €/kWh', parseLocaleNumber(form.quotaAmmortamento), 'input'],
+    ['Numero ricariche', parseLocaleNumber(form.numeroRicariche), 'input'],
+    ['kWh simulati', parseLocaleNumber(form.kwh), 'input'],
+    ['Commissione JCP %', parseLocaleNumber(form.percentualeJCP), 'input'],
+    ['Stripe %', parseLocaleNumber(form.stripePerc), 'input'],
+    ['Stripe fisso € per ricarica', parseLocaleNumber(form.stripeFisso), 'input'],
+    ['IVA %', parseLocaleNumber(form.iva), 'input'],
+    ['Modalità calcolo', form.calcMode, 'live_only | live_plus_amortization | manual_gross'],
+    ['Prezzo lordo manuale €/kWh', parseLocaleNumber(form.targetLordoManuale), 'usato solo se modalità manual_gross'],
+    ['Costo energia netto €/kWh', results.costoEnergiaNetto, '=IF(B11>0;B2/(1+B11/100);B2)'],
+    ['Costo vivo unitario', results.costoVivoUnitario, '=B14*(1+B3/100)+B4'],
+    ['Costo vivo totale', results.costoVivoTotale, '=B15*B7'],
+    ['Quota ammortamento totale', results.targetRecuperoTotale, '=B5*B7'],
+    ['Netto ente target', '', '=IF(B12="live_only";B16;IF(B12="live_plus_amortization";B16+B17;0))'],
+    ['Quota ente su imponibile', 1 - parseLocaleNumber(form.percentualeJCP) / 100, '=1-B8/100'],
+    ['Imponibile totale', results.imponibileTotale, '=IF(B12="manual_gross";(B13*B7)/(1+B11/100);IF(B19>0;B18/B19;0))'],
+    ['Lordo cliente', results.lordoCliente, '=B20*(1+B11/100)'],
+    ['Netto ente', results.nettoEnte, '=B20*B19'],
+    ['Lordo JCP', results.lordoJCP, '=B20*(B8/100)'],
+    ['Stripe fisso totale', results.stripeFixedTotal, '=B6*B10'],
+    ['Costo Stripe totale', results.stripeCost, '=B20*(B9/100)+B24'],
+    ['Netto JCP', results.nettoJCP, '=B23-B25'],
+    ['Saldo spese vive ente', results.saldoSpeseVive, '=B22-B16'],
+    ['Quota ammortamento coperta', results.recuperoInfrastrutturaleDisponibile, '=MAX(0;B27)'],
+    ['Copertura quota ammortamento', results.coperturaTarget, '=IF(B17>0;B28/B17;1)'],
+    ['IVA energia totale', results.ivaEnergiaTotale, '=MAX(B2-B14;0)*B7'],
+    ['IVA su netto ente', results.ivaCalcolataSuNettoEnte, '=B22*(B11/100)'],
+    ['Delta IVA (versata - calcolata su netto ente)', results.deltaIvaEnte, '=B30-B31'],
   ];
 
+  const toCsvCell = (cell) => {
+    if (cell === null || cell === undefined) return '';
+    const value = String(cell);
+    if (/[;"\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+    return value;
+  };
+
   return rows
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(';'))
+    .map((row) => row.map((cell) => toCsvCell(cell)).join(';'))
     .join('\n');
 }
 
@@ -639,7 +649,7 @@ function App() {
                   <HelpButton id="help-costi" title="Costi ente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Inserisci qui i costi vivi per kWh, la quota ammortamento per kWh, i kWh totali simulati e il numero di ricariche usato per moltiplicare il costo fisso Stripe.</HelpButton>
                 </div>
                 <div className="field-grid">
-                  <label><span>Costo energia netto IVA (€/kWh)</span><DecimalInput value={form.costoEnergia} onChange={(value) => updateField('costoEnergia', value)} /></label>
+                  <label><span>Costo energia IVA inclusa (€/kWh)</span><DecimalInput value={form.costoEnergia} onChange={(value) => updateField('costoEnergia', value)} /></label>
                   <label><span>Perdite rete (%)</span><DecimalInput value={form.perditeRete} onChange={(value) => updateField('perditeRete', value)} /></label>
                   <label><span>Altri costi vivi unitari (€/kWh)</span><DecimalInput value={form.altriCostiViviUnitari} onChange={(value) => updateField('altriCostiViviUnitari', value)} /></label>
                   <label><span>Quota ammortamento (€/kWh)</span><DecimalInput value={form.quotaAmmortamento} onChange={(value) => updateField('quotaAmmortamento', value)} /></label>
@@ -685,7 +695,6 @@ function App() {
                 <div className="result-group-head">
                   <h3>Cliente</h3>
                   <div className="title-actions group-actions">
-                    <span className="status-pill">Prezzo finale</span>
                     <HelpButton id="help-risultati-cliente" title="Cliente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Prezzo finale cliente e imponibile totale mostrano quanto paga il cliente e quale base netta viene poi ripartita tra ente e gestore.</HelpButton>
                   </div>
                 </div>
@@ -713,7 +722,6 @@ function App() {
                 <div className="result-group-head">
                   <h3>Ente</h3>
                   <div className="title-actions group-actions">
-                    <span className={`status-pill ${results.health}`}>{healthLabels[results.health]}</span>
                     <HelpButton id="help-risultati-ente" title="Ente" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Qui trovi solo i valori dell’ente: costi vivi, netto incassato, saldo spese vive e quota ammortamento coperta.</HelpButton>
                   </div>
                 </div>
@@ -735,7 +743,6 @@ function App() {
                 <div className="result-group-head">
                   <h3>Gestore / JCP</h3>
                   <div className="title-actions group-actions">
-                    <span className="status-pill">Ripartizione</span>
                     <HelpButton id="help-risultati-gestore" title="Gestore / JCP" activeHelpId={activeHelpId} setActiveHelpId={setActiveHelpId}>Qui trovi la quota lorda JCP, il costo Stripe totale, la parte fissa Stripe sulle ricariche e il netto reale del gestore.</HelpButton>
                   </div>
                 </div>
@@ -911,7 +918,7 @@ function App() {
               <label><span>Tariffa applicata</span><select value={analysisDraft.selectedTariffId} onChange={(e) => setAnalysisDraft((current) => ({ ...current, selectedTariffId: e.target.value }))}>{tariffOptions.map((item) => <option key={item.id} value={item.id}>{item.referencePeriod} · {item.id} · {item.source}</option>)}</select></label>
               <label><span>kWh realmente erogati</span><DecimalInput value={analysisDraft.consumedKwh} onChange={(value) => setAnalysisDraft((current) => ({ ...current, consumedKwh: value }))} /></label>
               <label><span>Netto ente effettivo (€/kWh)</span><DecimalInput value={analysisDraft.actualNetRevenuePerKwh} onChange={(value) => setAnalysisDraft((current) => ({ ...current, actualNetRevenuePerKwh: value }))} /></label>
-              <label><span>Costo energia aggiornato (€/kWh)</span><DecimalInput value={analysisDraft.overrideEnergyCost} onChange={(value) => setAnalysisDraft((current) => ({ ...current, overrideEnergyCost: value }))} /></label>
+              <label><span>Costo energia aggiornato IVA inclusa (€/kWh)</span><DecimalInput value={analysisDraft.overrideEnergyCost} onChange={(value) => setAnalysisDraft((current) => ({ ...current, overrideEnergyCost: value }))} /></label>
               <label><span>Quota ammortamento aggiornata (€/kWh)</span><DecimalInput value={analysisDraft.overrideAmortization} onChange={(value) => setAnalysisDraft((current) => ({ ...current, overrideAmortization: value }))} /></label>
               <label><span>Numero ricariche reale</span><DecimalInput value={analysisDraft.overrideSessions} onChange={(value) => setAnalysisDraft((current) => ({ ...current, overrideSessions: value }))} /></label>
             </div>
@@ -932,6 +939,8 @@ function App() {
                 <div><span>Quota ammortamento totale</span><strong>{formatCurrency(analysisPreview.targetRecuperoTotale)}</strong></div>
                 <div className={analysisPreview.saldoSpeseVive < 0 ? 'negative' : 'positive'}><span>Saldo spese vive ente</span><strong>{formatCurrency(analysisPreview.saldoSpeseVive)}</strong></div>
                 <div><span>Quota ammortamento coperta</span><strong>{formatCurrency(analysisPreview.recuperoInfrastrutturaleDisponibile)}</strong></div>
+                <div><span>IVA energia realmente versata</span><strong>{formatCurrency(analysisPreview.ivaEnergiaTotale)}</strong></div>
+                <div className={analysisPreview.deltaIvaEnte >= 0 ? 'positive' : 'warning'}><span>Delta IVA (versata - su netto ente)</span><strong>{formatCurrency(analysisPreview.deltaIvaEnte)}</strong></div>
                 <div className={analysisPreview.coperturaTarget >= 1 ? 'positive' : 'warning'}><span>Copertura quota ammortamento</span><strong>{formatNumber(analysisPreview.coperturaTarget * 100, 1)}%</strong></div>
               </div>
             )}
@@ -946,8 +955,8 @@ function App() {
             <a className="download-button" href={`data:text/csv;charset=utf-8,${encodeURIComponent(buildSpreadsheetCsv(form, results))}`} download="tariffe-ev-lnf-formule.csv">⬇︎ Scarica foglio di calcolo</a>
           </div>
           <ol>
-            <li><strong>Tutti gli importi inseriti sono netti IVA.</strong> Il prezzo lordo al cliente si ottiene solo alla fine applicando l’IVA all’imponibile totale.</li>
-            <li><strong>Spese vive ente.</strong> Costo vivo unitario = costo energia × (1 + perdite rete / 100) + altri costi vivi unitari.</li>
+            <li><strong>Costo energia inserito IVA inclusa.</strong> L’app scorpora automaticamente l’IVA: costo energia netto = costo energia lordo / (1 + IVA).</li>
+            <li><strong>Spese vive ente.</strong> Costo vivo unitario = costo energia netto × (1 + perdite rete / 100) + altri costi vivi unitari.</li>
             <li><strong>Spese vive totali ente.</strong> Spese vive totali = costo vivo unitario × kWh simulati.</li>
             <li><strong>Quota ammortamento totale.</strong> Quota ammortamento totale = quota ammortamento × kWh simulati.</li>
             <li><strong>Modalità 1.</strong> Il netto ente target coincide con le sole spese vive totali.</li>
@@ -959,6 +968,8 @@ function App() {
             <li><strong>Quota ammortamento coperta.</strong> È solo la parte che resta dopo aver coperto le spese vive: max(0, netto ente − spese vive totali ente).</li>
             <li><strong>Copertura quota ammortamento.</strong> Copertura = quota ammortamento coperta / quota ammortamento totale.</li>
             <li><strong>Utile JCP reale.</strong> Netto JCP = lordo JCP − [imponibile × Stripe % + (Stripe fisso × numero ricariche)].</li>
+            <li><strong>IVA nel tool utile ente.</strong> L’anteprima mostra IVA energia realmente versata (da costo energia lordo) e il delta rispetto all’IVA calcolata sul netto ente.</li>
+            <li><strong>CSV formule pronto all’uso.</strong> Il download include formule Excel dirette con riferimenti di cella (es. `=B2*(1+B3/100)+B4`), non semplice testo descrittivo.</li>
           </ol>
         </section>
       )}

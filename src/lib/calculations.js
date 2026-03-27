@@ -182,7 +182,7 @@ export function upsertEntryInState(entries, nextEntry) {
 export function calculateResults(form) {
   const kwh = clampNonNegative(form.kwh);
   const safeKwh = Math.max(kwh, 0.0001);
-  const costoEnergia = clampNonNegative(form.costoEnergia);
+  const costoEnergiaLordo = clampNonNegative(form.costoEnergia);
   const perditeRete = clampPercentage(form.perditeRete);
   const altriCostiViviUnitari = clampNonNegative(form.altriCostiViviUnitari);
   const quotaAmmortamento = clampNonNegative(form.quotaAmmortamento);
@@ -191,8 +191,11 @@ export function calculateResults(form) {
   const stripePerc = clampPercentage(form.stripePerc);
   const stripeFisso = clampNonNegative(form.stripeFisso);
   const iva = clampNonNegative(form.iva);
+  const ivaFactor = 1 + iva / 100;
+  const costoEnergiaNetto = ivaFactor > 0 ? costoEnergiaLordo / ivaFactor : costoEnergiaLordo;
+  const ivaEnergiaPerKwh = Math.max(costoEnergiaLordo - costoEnergiaNetto, 0);
 
-  const costoVivoUnitario = costoEnergia * (1 + perditeRete / 100) + altriCostiViviUnitari;
+  const costoVivoUnitario = costoEnergiaNetto * (1 + perditeRete / 100) + altriCostiViviUnitari;
   const costoVivoTotale = costoVivoUnitario * kwh;
   const targetAmmortamentoTotale = quotaAmmortamento * kwh;
 
@@ -207,12 +210,12 @@ export function calculateResults(form) {
 
   let imponibileTotale = 0;
   if (form.calcMode === 'manual_gross') {
-    imponibileTotale = (clampNonNegative(form.targetLordoManuale) * kwh) / (1 + iva / 100);
+    imponibileTotale = (clampNonNegative(form.targetLordoManuale) * kwh) / ivaFactor;
   } else {
     imponibileTotale = quotaEnte > 0 ? nettoEnteTarget / quotaEnte : 0;
   }
 
-  const lordoCliente = imponibileTotale * (1 + iva / 100);
+  const lordoCliente = imponibileTotale * ivaFactor;
   const nettoEnte = imponibileTotale * quotaEnte;
   const lordoJCP = imponibileTotale * (percentualeJCP / 100);
   const stripeFixedTotal = stripeFisso * numeroRicariche;
@@ -222,13 +225,18 @@ export function calculateResults(form) {
   const saldoSpeseVive = nettoEnte - costoVivoTotale;
   const recuperoInfrastrutturaleDisponibile = Math.max(0, saldoSpeseVive);
   const coperturaTarget = targetAmmortamentoTotale > 0 ? recuperoInfrastrutturaleDisponibile / targetAmmortamentoTotale : 1;
+  const ivaCalcolataSuNettoEnte = nettoEnte * (iva / 100);
+  const ivaEnergiaTotale = ivaEnergiaPerKwh * kwh;
+  const deltaIvaEnte = ivaEnergiaTotale - ivaCalcolataSuNettoEnte;
 
   let health = 'green';
   if (saldoSpeseVive < 0) health = 'red';
-  else if (coperturaTarget < 1) health = 'yellow';
+  else if (coperturaTarget + 1e-9 < 1) health = 'yellow';
 
   return {
     consumedKwh: kwh,
+    costoEnergiaLordo,
+    costoEnergiaNetto,
     costoVivoUnitario,
     costoVivoTotale,
     quotaAmmortamento,
@@ -245,6 +253,10 @@ export function calculateResults(form) {
     saldoSpeseVive,
     recuperoInfrastrutturaleDisponibile,
     coperturaTarget,
+    ivaEnergiaPerKwh,
+    ivaEnergiaTotale,
+    ivaCalcolataSuNettoEnte,
+    deltaIvaEnte,
     prezzoUnitarioLordo: lordoCliente / safeKwh,
     prezzoUnitarioNettoEnte: nettoEnte / safeKwh,
     health,
